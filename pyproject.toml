@@ -1,0 +1,15 @@
+[project]
+name = "toronto-through-time"
+version = "0.1.0"
+description = "Data pipeline for a 3D map of Toronto's buildings through time"
+requires-python = ">=3.12"
+dependencies = [
+    "geopandas>=1.0",
+    "pyogrio>=0.10",
+    "shapely>=2.0",
+    "pyproj>=3.6",
+    "pandas>=2.2",
+    "numpy>=2.0",
+    "scipy>=1.14",
+    "openpyxl>=3.1",
+]

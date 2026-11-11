@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Toronto Through Time: sources</title>
+<style>
+  body { font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #1d2733; max-width: 760px; margin: 40px auto; padding: 0 16px; }
+  h1 { font-size: 24px; } h2 { font-size: 17px; margin-top: 28px; }
+  table { border-collapse: collapse; width: 100%; } td, th { text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid #e3e7ea; vertical-align: top; }
+  a { color: #2c7bb6; }
+</style>
+</head>
+<body>
+<h1>Sources and method</h1>
+<p>A proof of concept covering the old City of Toronto (the pre-1998 boundary). The map shows the buildings that stand today, each appearing in the year it was built. Buildings that were demolished are not shown.</p>
+
+<h2>Where each building's year comes from</h2>
+<p>Toronto publishes no year-built record for its buildings, so each building takes its year from the best source that covers it, in this order. The "Data quality" button colours the map by source.</p>
+<table>
+<tr><th>Source</th><th>What it gives</th></tr>
+<tr><td>Named landmarks</td><td>Wikidata inception or opening dates for buildings, plus a short hand-checked list (<code>data/manual/landmarks.csv</code>) that corrects or adds well-known buildings.</td></tr>
+<tr><td>Heritage Register</td><td>City of Toronto Heritage Register, construction date field. For a range such as 1903-1910 the last year is used.</td></tr>
+<tr><td>Apartment registration</td><td>RentSafeTO Apartment Building Registration, year built. Rental buildings of three or more storeys and ten or more units.</td></tr>
+<tr><td>Building permits</td><td>City of Toronto cleared and active permits for a new building, 2001 onwards. The year is the completion date, capped at two years after issue for houses and five for larger buildings, because many permits are closed long after the work ends.</td></tr>
+<tr><td>3D massing model</td><td>The first yearly snapshot of the City's 3D Massing model (2017 to 2025) in which the building appears. 2017 is the baseline, so this dates buildings from 2018 on.</td></tr>
+<tr><td>Estimate</td><td>Everything else. The 2021 Census counts dwellings by period of construction for each neighbourhood. Dwellings already explained by dated buildings are taken out, and the rest are handed to undated buildings from newest to oldest, ordered by the dates of the nearest dated buildings. Buildings left over are older than 1961 and take the typical year of their dated neighbours. Estimates are good to about a decade; the pre-1961 ones are scattered by up to three years either way so that a block of similar houses does not appear in a single year.</td></tr>
+</table>
+
+<h2>The old shoreline</h2>
+<p>Over today's land, the map paints the water as drawn on ten historic maps from 1834 to 1931, so the harbour, the peninsula that became the Island, and the marsh at Ashbridge's Bay appear as they were. Each map blends into the next over the eight years before it. Before 1834 the 1834 map is used.</p>
+<p>What is approximate or added by hand: the 1858 breach that cut the peninsula is a rectangle placed at the Eastern Gap; the Island keeps its 1851 outline until about 1910 and is today's Island after that, because the later source maps do not draw it; the marsh is the 1834 outline until the 1891 map; the last mapped shore (1931) gives way to today's between 1950 and 1960, which is a choice and not a record of when each piece of landfill was finished.</p>
+<h2>Streets and place names</h2>
+<p>There is no modern base map. The streets are those of the City's centreline file, which has no dates, so every street's year is an estimate. A stretch of street gets the earliest of: the years of the buildings along it and around it; the ten-block townsite of 1793; and the built-up town as drawn on the maps of 1834 (Chewett) and 1842 (Cane), outlined by eye from the georeferenced scans. Where an opening year is documented (Yonge Street, University Avenue, the Gardiner Expressway and about forty other stretches) it replaces the estimate. No street appears before its ground was dry land.</p>
+<p>What this gets wrong: only streets that exist today are shown; where every old building is gone, a street appears too late; street names are today's in every year; some documented years are a survey or a first mention, not an opening. Creeks are not drawn. Today's Don River channel shows in every year.</p>
+<p>Railways are today's tracks, from OpenStreetMap, shown from the year each line opened (<code>data/manual/rail_years.csv</code>, one source per line). Along the harbour today's tracks lie on ground filled in later, so there the line is moved to the shore of each mapped year, which is about where the first tracks ran.</p>
+<p>Forest: in 1793 all the land is shown wooded, which is an assumption. For 1851 the woods are those drawn on J.O. Browne's Map of the Township of York, picked out of the scan by a program that looks for the map's tree symbols; it misses some woods and takes some orchards and worn paper for woods. Between 1793 and 1851 the clearing spreads out from the first roads, which is an estimate. At every date a place is cleared when a street or building comes within 150 metres.</p>
+<p>Parks, cemeteries and golf courses are today's, from the City's Green Spaces file, which has no dates. They are shown green in every year once the forest around them is gone, whenever they were really laid out. Ponds and rivers are today's.</p>
+<p>Fort York: every building inside the ramparts is dated 1815, the year the rebuilding begun in 1813 was finished. That is wrong for the Blue Barracks, a reconstruction of 1986, and for a few small modern service buildings. The ramparts are today's outline.</p>
+<p>Place names appear for the years they were in use. Each has a source, listed with the estimated dates and label positions in <code>data/manual/places.csv</code> and <code>places_README.md</code>.</p>
+<h2>Data</h2>
+<table>
+<tr><th>Dataset</th><th>Used for</th><th>Licence</th></tr>
+<tr><td>City of Toronto, 3D Massing (2017 to 2025)</td><td>Building outlines and heights</td><td>Open Government Licence - Toronto</td></tr>
+<tr><td>City of Toronto, Heritage Register</td><td>Construction dates</td><td>Open Government Licence - Toronto</td></tr>
+<tr><td>City of Toronto, Apartment Building Registration</td><td>Year built</td><td>Open Government Licence - Toronto</td></tr>
+<tr><td>City of Toronto, Building Permits (cleared and active)</td><td>New buildings since 2001</td><td>Open Government Licence - Toronto</td></tr>
+<tr><td>City of Toronto, Address Points</td><td>Locating permits and apartment buildings</td><td>Open Government Licence - Toronto</td></tr>
+<tr><td>City of Toronto, Neighbourhood Profiles 2021 (Statistics Canada, 2021 Census)</td><td>Dwellings by period of construction</td><td>Open Government Licence - Toronto; Statistics Canada Open Licence</td></tr>
+<tr><td>City of Toronto, Neighbourhoods and Former Municipality Boundaries</td><td>Neighbourhood and old-city outlines</td><td>Open Government Licence - Toronto</td></tr>
+<tr><td><a href="https://mdl.library.utoronto.ca/node/42410">Historical Hydrography of Toronto</a>, Map &amp; Data Library, University of Toronto</td><td>Water and marsh in 1834 and 1851 (whole harbour); downtown shore in 1857, 1872 and 1878</td><td>Open, citation required</td></tr>
+<tr><td><a href="https://maps.library.utoronto.ca/dvhmp/data.html">Don Valley Historical Mapping Project</a>, Marcel Fortin and Jennifer Bonnell</td><td>Water in 1891, 1894, 1909, 1918 and 1931</td><td>Creative Commons Attribution 2.5 Canada</td></tr>
+<tr><td>City of Toronto, Toronto Centreline</td><td>Street lines and names</td><td>Open Government Licence - Toronto</td></tr>
+<tr><td>Georeferenced scans of Chewett (1834) and Cane (1842), from the <a href="https://mdl.library.utoronto.ca/node/42410">Historical Hydrography of Toronto</a> collection; the 1834 scan courtesy of Derek Hayes</td><td>Outline of the built-up town, traced by eye; the scans are not shown</td><td>Open; cite the source</td></tr>
+<tr><td>Wikipedia articles on Toronto streets and neighbourhoods (one per row in <code>data/manual/</code>)</td><td>Opening years of streets, years place names were in use</td><td>CC BY-SA, facts only</td></tr>
+<tr><td>City of Toronto, Green Spaces</td><td>Parks, cemeteries, golf courses</td><td>Open Government Licence - Toronto</td></tr>
+<tr><td>Georeferenced scan of Browne, Map of the Township of York (1851), from the Historical Hydrography of Toronto collection</td><td>Woods in 1851</td><td>Open; cite the source</td></tr>
+<tr><td>OpenStreetMap contributors</td><td>Railway tracks; outline of Fort York</td><td>ODbL</td></tr>
+<tr><td>Wikidata</td><td>Landmark names and dates</td><td>CC0</td></tr>
+<tr><td>Wikipedia, "Old Toronto" and "Demographics of Toronto"</td><td>Census population of the old city, 1834 to 2021</td><td>CC BY-SA, figures only</td></tr>
+<tr><td>OpenFreeMap, OpenMapTiles, OpenStreetMap contributors</td><td>Today's lake and rivers, lettering</td><td>ODbL</td></tr>
+</table>
+<p>Contains information licensed under the Open Government Licence - Toronto.</p>
+</body>
+</html>

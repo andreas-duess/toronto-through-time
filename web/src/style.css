@@ -1,0 +1,105 @@
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+:root {
+  --ink: #1d2733;
+  --muted: #5d6b7a;
+  --panel: rgba(255, 255, 255, 0.92);
+  --line: rgba(29, 39, 51, 0.14);
+  --accent: #d9542b;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  background: #e9edf0;
+}
+
+#map { position: absolute; inset: 0 0 64px 0; }
+
+#population, #story, #info, #legend, #shoreline-note {
+  position: absolute;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  backdrop-filter: blur(6px);
+  z-index: 2;
+}
+
+#population { top: 16px; right: 16px; padding: 10px 14px; min-width: 170px; text-align: right; }
+#population .label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+#population-value { font-family: var(--serif); font-size: 30px; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.sublabel { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+#year-label {
+  position: absolute; left: 24px; bottom: 72px; z-index: 2; pointer-events: none;
+  font-family: var(--serif); font-size: 104px; line-height: 1; font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 18px #fff, 0 0 6px #fff, 0 0 2px #fff;
+}
+
+#story { top: 16px; left: 16px; width: 400px; max-width: calc(100vw - 32px); padding: 14px 16px 10px; }
+#story-count { font-size: 11px; letter-spacing: 0.12em; color: var(--muted); font-variant-numeric: tabular-nums; }
+#story-title { margin: 4px 24px 6px 0; font-family: var(--serif); font-size: 24px; font-weight: 500; line-height: 1.2; }
+#story-text { margin: 0 0 12px; font-family: var(--serif); font-size: 15.5px; line-height: 1.5; }
+#story-progress { height: 2px; background: var(--line); }
+#story-progress div { height: 100%; width: 0; background: var(--accent); }
+#story-nav { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
+#story-nav button, #story-close { border: 0; background: none; font-size: 15px; cursor: pointer; color: var(--ink); padding: 6px 8px; }
+#story-close { position: absolute; top: 8px; right: 8px; color: var(--muted); }
+#story-source { margin-left: auto; font-family: var(--serif); font-style: italic; font-size: 12px; color: var(--muted); }
+
+#legend { right: 16px; top: 150px; padding: 10px 12px; font-size: 12px; line-height: 1.7; }
+#legend .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 7px; vertical-align: -1px; }
+#legend .count { color: var(--muted); margin-left: 6px; }
+
+#shoreline-note { top: 116px; right: 16px; padding: 5px 10px; font-size: 12px; color: var(--muted); }
+#shoreline-note::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 7px; vertical-align: -2px; border-radius: 2px; background: #b5cfe0; border: 1px solid #8fb0c6; }
+
+#info { right: 60px; bottom: 104px; width: 280px; padding: 12px 14px; font-size: 13px; }
+#info h3 { margin: 0 22px 6px 0; font-size: 15px; }
+#info table { border-collapse: collapse; }
+#info td { padding: 2px 10px 2px 0; vertical-align: top; }
+#info td:first-child { color: var(--muted); }
+#info .close { position: absolute; top: 8px; right: 8px; border: 0; background: none; font-size: 14px; cursor: pointer; color: var(--muted); }
+
+#controls {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 64px;
+  display: flex; align-items: center; gap: 12px; padding: 0 16px;
+  background: #fff; border-top: 1px solid var(--line);
+}
+#controls button, #controls select {
+  height: 36px; padding: 0 12px; font: inherit; font-size: 13px; color: var(--ink);
+  background: #fff; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+}
+#controls button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+#play { width: 44px; font-size: 15px; }
+
+#slider-wrap { position: relative; flex: 1; min-width: 0; }
+#slider { width: 100%; margin: 0; accent-color: var(--accent); }
+#event-ticks { position: absolute; left: 8px; right: 8px; top: -9px; height: 10px; }
+#event-ticks .tick {
+  position: absolute; width: 9px; height: 10px; margin-left: -4px; cursor: pointer;
+  background: linear-gradient(var(--accent), var(--accent)) center / 2px 100% no-repeat;
+}
+#event-ticks .tick.current { background-size: 4px 100%; }
+
+#loading {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  padding: 10px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; font-size: 14px;
+}
+#loading.done { display: none; }
+
+#sources-link { font-size: 12px; color: var(--muted); }
+
+@media (max-width: 640px) {
+  #year-label { font-size: 56px; left: 16px; }
+  #population-value { font-size: 20px; }
+  #story-text { font-size: 14px; }
+  #quality, #sources-link { display: none; }
+  #speed { display: none; }
+  #info { left: 16px; width: auto; }
+}

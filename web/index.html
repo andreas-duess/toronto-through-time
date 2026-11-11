@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Toronto Through Time</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <div id="population">
+      <div class="label">Population</div>
+      <div id="population-value">—</div>
+      <div class="sublabel">old City of Toronto</div>
+      <div id="standing" class="sublabel"></div>
+    </div>
+
+    <div id="year-label">1793</div>
+
+    <div id="story" hidden>
+      <button id="story-close" aria-label="Close story">✕</button>
+      <div id="story-count"></div>
+      <h2 id="story-title"></h2>
+      <p id="story-text"></p>
+      <div id="story-progress"><div></div></div>
+      <div id="story-nav">
+        <button id="story-prev" aria-label="Previous">⏮</button>
+        <button id="story-play" aria-label="Pause story">❚❚</button>
+        <button id="story-next" aria-label="Next">⏭</button>
+        <a id="story-source" target="_blank" rel="noopener">source</a>
+      </div>
+    </div>
+
+    <div id="legend" hidden></div>
+    <div id="shoreline-note" hidden></div>
+
+    <footer id="controls">
+      <button id="play" aria-label="Play">▶</button>
+      <button id="story-toggle" aria-pressed="false">Story</button>
+      <div id="slider-wrap">
+        <div id="event-ticks"></div>
+        <input id="slider" type="range" step="0.01" aria-label="Year" />
+      </div>
+      <select id="speed" aria-label="Playback speed">
+        <option value="1">1 yr/s</option>
+        <option value="3">3 yr/s</option>
+        <option value="6" selected>6 yr/s</option>
+        <option value="12">12 yr/s</option>
+        <option value="25">25 yr/s</option>
+      </select>
+      <button id="quality" aria-pressed="false" title="Colour each building by where its year comes from">Data quality</button>
+      <a id="sources-link" href="./sources.html" target="_blank" rel="noopener">sources</a>
+    </footer>
+
+    <div id="info" hidden></div>
+    <div id="loading">Loading Toronto…</div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
