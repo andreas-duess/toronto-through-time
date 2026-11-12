@@ -28,10 +28,18 @@ OUT = pathlib.Path(__file__).resolve().parent.parent / "data" / "interim" / "isl
 YEARS = [1913, 1924]
 BOX = (-79.418, 43.606, -79.343, 43.6345)   # lon/lat around the Island
 Z = 16            # about 1.7 m of ground per pixel
-MIN_HA = 1
-# Where the index map's gutter crosses the Island (lon/lat, read off the strips it left; hand-placed)
-GUTTER = [[(-79.3777, 43.6375), (-79.3752, 43.6335), (-79.3614, 43.6111), (-79.3590, 43.6072)],
-          [(-79.3673, 43.6225), (-79.3668, 43.6185), (-79.3659, 43.6111), (-79.3655, 43.6075)]]
+MIN_HA = 0.5      # the smallest island kept; the Royal Canadian Yacht Club's is under a hectare
+# The index map's gutter where it shows beside the Island plates, in the harbour and in the lake
+# (lon/lat, hand-placed; under the plates there is no gutter). The two atlases were scanned a
+# little differently, so each line lies between the two.
+GUTTER = [[(-79.3777, 43.6375), (-79.3752, 43.6335), (-79.3740, 43.6310), (-79.3716, 43.6253)],
+          [(-79.3685, 43.6170), (-79.3662, 43.6120), (-79.3640, 43.6072)]]
+# The lake shore from Centre Island to the Eastern Gap, a little out from the beach (lon/lat,
+# hand-placed off the 1924 plate). Beyond it the index map shows through beside the plates, and its
+# yellow band for the breakwater and some pale paper read as land.
+LAKE_SHORE = [(-79.36838, 43.61702), (-79.36810, 43.61787), (-79.36585, 43.61946), (-79.36327, 43.62126),
+              (-79.36080, 43.62297), (-79.35872, 43.62455), (-79.35683, 43.62603), (-79.35550, 43.62712), (-79.35437, 43.62852),
+              (-79.35361, 43.63054), (-79.35314, 43.63240), (-79.35211, 43.63354)]
 EARTH = 20037508.342789244
 
 
@@ -102,7 +110,10 @@ if __name__ == "__main__":
         gutter = shapely.union_all(gpd.GeoSeries([shapely.LineString(line) for line in GUTTER], crs=4326)
                                    .to_crs(water.UTM).buffer(110).values)
         beside = island.difference(gutter).buffer(-20).buffer(20 + 140)
-        island = shapely.simplify(island.difference(gutter.difference(beside)).buffer(-14).buffer(14), 4)
+        island = island.difference(gutter.difference(beside))
+        lake = shapely.Polygon(LAKE_SHORE + [(BOX[2], LAKE_SHORE[-1][1]), (BOX[2], BOX[1]), (LAKE_SHORE[0][0], BOX[1])])
+        island = island.difference(gpd.GeoSeries([lake], crs=4326).to_crs(water.UTM).iloc[0])
+        island = shapely.simplify(island.buffer(-14).buffer(14), 4)
         gpd.GeoSeries([island], crs=water.UTM).to_file(OUT / f"{year}.geojson", driver="GeoJSON")
         print(year, f"{island.area / 1e4:.0f} ha in {len(shapely.get_parts(island))} pieces; plates cover {1 - blank.mean():.0%}", flush=True)
         shade = rgb.copy()

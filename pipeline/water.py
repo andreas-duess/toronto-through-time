@@ -8,6 +8,7 @@ Sources (University of Toronto Map & Data Library, digitised from georeferenced 
   - Don Valley Historical Mapping Project: 1891, 1894, 1909, 1918, 1931 (harbour and Ashbridge's Bay;
     the Island is not drawn in these)
   - Goad's fire insurance plans of 1913 and 1924, for the Island (pipeline/island.py; run it first)
+  - today's buildings on the Island (pipeline/build.py; run it first): each stands on land from its year
 
 Run: uv run pipeline/water.py
 """
@@ -17,6 +18,7 @@ import urllib.request
 import zipfile
 
 import geopandas as gpd
+import numpy as np
 import shapely
 from shapely.affinity import translate
 from shapely.geometry import Polygon, box
@@ -77,6 +79,7 @@ COMBINED = {GAP_YEAR: f"{LAYERS[1857][3]}, with the {GAP_YEAR} breach added by h
 ISLAND_FROM = {1918: "Goad's plan of 1913", 1931: "Goad's plan of 1924"}
 
 SIMPLIFY_M = 1.5
+GROUND_M = 12     # ground kept around a standing building on the Island
 
 
 def log(*a):
@@ -111,6 +114,24 @@ def polygons_only(geom):
     return shapely.union_all(parts) if parts else Polygon()
 
 
+def standing(zone):
+    """Today's buildings inside the zone with a little ground around each, and their years (from
+    pipeline/build.py, if it has run). A building that stands in a year stands on land, also
+    where the plan's outline misses it or lies a few metres off."""
+    try:
+        origin = json.loads((OUT / "meta.json").read_text())["origin"]
+        pos = np.fromfile(OUT / "positions.bin", "<f4").reshape(-1, 3)[:, :2].astype(float) + origin
+        starts = np.fromfile(OUT / "starts.bin", "<u4")
+        years = np.fromfile(OUT / "years.bin", "<u2")
+    except FileNotFoundError:
+        return np.array([], object), np.array([], int)
+    first = gpd.GeoSeries(gpd.points_from_xy(*pos[starts[:-1]].T), crs=4326).to_crs(UTM)
+    inside = np.flatnonzero(first.within(zone).values)
+    outlines = [Polygon(pos[starts[i]:starts[i + 1]]) for i in inside]
+    ground = gpd.GeoSeries(outlines, crs=4326).to_crs(UTM).buffer(0).buffer(GROUND_M)
+    return ground.values, years[inside]
+
+
 def frames():
     zone, gap, lake = to_utm(ISLAND_ZONE), to_utm(EASTERN_GAP), to_utm(OPEN_LAKE)
     out = {}
@@ -139,13 +160,15 @@ def frames():
     island = {y: gpd.read_file(ISLAND / f"{y}.geojson").geometry.iloc[0] for y in ISLAND_YEARS
               if (ISLAND / f"{y}.geojson").exists()}
     zone_west = zone.intersection(west)
+    built, built_year = standing(zone_west)
     for year, harbour in ((1891, 1891), (1894, 1894), (1909, 1909), (1913, 1909), (1918, 1918), (1924, 1918), (1931, 1931)):
         f = area_of(read(harbour))
         drawn = max((y for y in island if y <= year), default=None)
         if drawn is None:
             out[year] = f.difference(zone).union(island_1858) if year <= 1909 else f.difference(zone_west)
         else:
-            out[year] = f.difference(zone_west).union(zone_west.difference(island[drawn]))
+            land = shapely.union_all([island[drawn], *built[built_year <= year]])
+            out[year] = f.difference(zone_west).union(zone_west.difference(land))
     # the half-metre in and out removes slivers left along the helper shapes
     out = {y: polygons_only(f.union(lake).buffer(-0.5).buffer(0.5)) for y, f in sorted(out.items())}
     # Where the old maps show land that is water today (the peninsula and the bar along the marsh),
