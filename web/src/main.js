@@ -1,6 +1,6 @@
 import maplibregl from "maplibre-gl";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { COORDINATE_SYSTEM } from "@deck.gl/core";
+import { COORDINATE_SYSTEM, LightingEffect, AmbientLight, DirectionalLight } from "@deck.gl/core";
 import { SolidPolygonLayer } from "@deck.gl/layers";
 import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
 import { TimeExtension } from "./time.js";
@@ -17,6 +17,14 @@ const OLD_COLOR = [214, 205, 190];
 const NEW_COLOR = [217, 84, 43];
 const NEW_TINT = NEW_COLOR.map((c, i) => c / OLD_COLOR[i]);
 const riseExtension = new TimeExtension({ mode: "rise" });
+// An afternoon sun from the south-south-west and a weak light from the east, so that every side of
+// a building has its own tone and none is washed out.
+const LIGHTING = new LightingEffect({
+  ambient: new AmbientLight({ color: [255, 255, 255], intensity: 1 }),
+  sun: new DirectionalLight({ color: [255, 250, 240], intensity: 1.2, direction: [0.5, 0.8, -1] }),
+  fill: new DirectionalLight({ color: [235, 240, 255], intensity: 0.3, direction: [-1, -0.3, -0.6] }),
+});
+const MATERIAL = { ambient: 0.55, diffuse: 0.5, shininess: 8, specularColor: [0, 0, 0] };
 const LOST_COLOR = [120, 94, 74];
 const TIER_COLORS = {
   landmark: [44, 123, 182],
@@ -99,6 +107,8 @@ const map = new maplibregl.Map({
   pitch: opened.pitch ?? 55,
   bearing: opened.bearing ?? -17,
   maxPitch: 75,
+  // smooth edges on the buildings
+  canvasContextAttributes: { antialias: true },
   minZoom: 9,
   maxZoom: 19,
 });
@@ -114,7 +124,7 @@ for (const type of ["mousedown", "wheel", "touchstart"]) {
   }, { passive: true });
 }
 
-const overlay = new MapboxOverlay({ interleaved: true, layers: [], onClick: showBuilding });
+const overlay = new MapboxOverlay({ interleaved: true, layers: [], effects: [LIGHTING], onClick: showBuilding });
 map.addControl(overlay);
 
 let meta, buildings, years, heights, tiers, names, water, population, stops, streets, streetLabels, places, area, rail, sites, forest, parks, lost, addresses, landmarks;
@@ -193,7 +203,7 @@ function lostLayer() {
     getElevation: (_, { index }) => lost.tall[index],
     getFillColor: state.quality ? LOST_COLOR : OLD_COLOR,
     updateTriggers: { getFillColor: state.quality },
-    material: { ambient: 0.55, diffuse: 0.6, shininess: 8 },
+    material: MATERIAL,
     pickable: true,
     autoHighlight: true,
     highlightColor: [255, 255, 255, 90],
@@ -219,7 +229,7 @@ function landmarkLayers() {
     getColor: [255, 255, 255],
     getScale: [1, 1, Math.max(0.02, Math.min(1, (state.year - p.from) / (p.to - p.from)))],
     updateTriggers: { getScale: Math.min(state.year, p.to) },
-    material: { ambient: 0.6, diffuse: 0.6, shininess: 12 },
+    material: MATERIAL,
     pickable: true,
   }));
 }
@@ -238,7 +248,7 @@ function buildingLayer() {
     getElevation: (_, { index }) => heights[index],
     getFillColor: state.quality ? (_, { index }) => TIER_COLORS[meta.tiers[tiers[index]]] : OLD_COLOR,
     updateTriggers: { getFillColor: state.quality },
-    material: { ambient: 0.55, diffuse: 0.6, shininess: 8 },
+    material: MATERIAL,
     pickable: true,
     autoHighlight: true,
     highlightColor: [255, 255, 255, 90],
