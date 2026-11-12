@@ -5,6 +5,7 @@ import { SolidPolygonLayer } from "@deck.gl/layers";
 import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
 import { TimeExtension } from "./time.js";
 import { landmarkParts, FACTS } from "./landmarks.js";
+import { fetchPacked, fetchMetres, fetchStarts, fetchPositions } from "./pack.js";
 
 const $ = (id) => document.getElementById(id);
 const DATA = "./data/";
@@ -42,7 +43,6 @@ const FOREST_COLOR = "#b9c8a2";
 const PARK_COLOR = "#cbdcae";
 
 const fetchJson = (name) => fetch(DATA + name).then((r) => r.json());
-const fetchArray = (name, Type) => fetch(DATA + name).then((r) => r.arrayBuffer()).then((b) => new Type(b));
 
 const state = { year: 1793, playing: false, speed: 6, quality: false };
 // index: the stop on the card (-1 when closed); run: bumped to cancel a stop's animation
@@ -123,14 +123,12 @@ const replaced = new Set();
 
 async function load() {
   meta = await fetchJson("meta.json");
-  const [positions, starts] = await Promise.all([
-    fetchArray("positions.bin", Float32Array),
-    fetchArray("starts.bin", Uint32Array),
-  ]);
+  const [starts, bases] = await Promise.all([fetchStarts(DATA + "counts.pack"), fetchMetres(DATA + "bases.pack")]);
+  const positions = await fetchPositions(DATA + "positions.pack", starts, bases);
   [years, heights, tiers, names, water, population, stops, streets, streetLabels, places, area, rail, sites, forest, parks] = await Promise.all([
-    fetchArray("years.bin", Uint16Array),
-    fetchArray("heights.bin", Float32Array),
-    fetchArray("tiers.bin", Uint8Array),
+    fetchPacked(DATA + "years.pack", Uint16Array),
+    fetchMetres(DATA + "heights.pack"),
+    fetchPacked(DATA + "tiers.pack", Uint8Array),
     fetchJson("names.json"),
     fetchJson("water.json"),
     fetchJson("population.json"),
@@ -171,11 +169,11 @@ async function loadLost() {
   const info = await fetch(DATA + "lost.json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
   if (!info) return null;
   const [positions, starts, span, tall, about] = await Promise.all([
-    fetchArray("lost.positions.bin", Float32Array),
-    fetchArray("lost.starts.bin", Uint32Array),
-    fetchArray("lost.years.bin", Uint16Array),
-    fetchArray("lost.heights.bin", Float32Array),
-    fetchArray("lost.info.bin", Uint8Array),
+    fetchPositions(DATA + "lost.positions.pack"),
+    fetchStarts(DATA + "lost.counts.pack"),
+    fetchPacked(DATA + "lost.years.pack", Uint16Array),
+    fetchMetres(DATA + "lost.heights.pack"),
+    fetchPacked(DATA + "lost.info.pack", Uint8Array),
   ]);
   return { ...info, span, tall, about,
     data: { length: info.count, startIndices: starts, attributes: { getPolygon: { value: positions, size: 2 } } } };

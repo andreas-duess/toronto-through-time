@@ -1,0 +1,2 @@
+# plain arrays for the pipeline; the page loads the .pack copies (pipeline/pack.py)
+data/*.bin

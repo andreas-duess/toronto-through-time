@@ -30,6 +30,7 @@ uv run --with pillow --with scipy --with rasterio pipeline/plans.py   # outlines
 uv run --with pillow --with scipy --with rasterio pipeline/plans.py --area island    # and --area trinity
 uv run --with pillow --with scipy --with rasterio pipeline/island.py   # Island outline 1913, 1924; then water.py again
 uv run --with rasterio pipeline/lost.py    # lost buildings; then run build.py, streets.py and this once more
+uv run pipeline/pack.py        # last: small copies of the building files for the page
 ```
 
 ## How a building gets its year
