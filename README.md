@@ -91,3 +91,8 @@ georeferenced maps of 1834 and 1842), `rail_years.csv` (opening year of each rai
 `sites.csv` (a site whose buildings share one documented year, with its outline: Fort York).
 `lost_zones.csv` (places where written sources date the lost buildings: parts of the Island, the
 old Trinity College), `island.csv` (the research behind the Island rows). `places_README.md` lists what is estimated or unsourced.
+
+## Online
+
+Live at https://toronto.duess.com, a static site on Cloudflare Workers (`web/wrangler.jsonc`).
+To publish the current state: `cd web && npm run deploy` (builds, then uploads `web/dist`).

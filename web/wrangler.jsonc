@@ -1,0 +1,7 @@
+{
+  // Static site on Cloudflare Workers. Deploy: npm run deploy
+  "name": "toronto-through-time",
+  "compatibility_date": "2026-11-10",
+  "assets": { "directory": "./dist" },
+  "routes": [{ "pattern": "toronto.duess.com", "custom_domain": true }]
+}
