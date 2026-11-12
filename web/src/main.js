@@ -92,6 +92,8 @@ const map = new maplibregl.Map({
   // names and the old shore are our own dated layers, added in addMapLayers().
   style: {
     version: 8,
+    // paint changes at once: the year sets every opacity itself, frame by frame
+    transition: { duration: 0, delay: 0 },
     glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
     sources: { openmaptiles: { type: "vector", url: "https://tiles.openfreemap.org/planet" } },
     layers: [
@@ -267,8 +269,14 @@ function buildingLayer() {
 
 // Each mapped shore blends into the next over the years before the next map, this many at most.
 const SHORE_BLEND = 2;
-const EMPTY = { type: "Polygon", coordinates: [] };
-let waterStep = -1;
+const WATER_PARTS = ["common", "lost", "gained"];
+// opacity last set on each layer, so that only changes go to the map
+const opacities = {};
+function setOpacity(layer, value) {
+  if (opacities[layer] === value) return;
+  opacities[layer] = value;
+  map.setPaintProperty(layer, "fill-opacity", value);
+}
 
 // Width of a street by kind (lane, local, collector, arterial, expressway), growing with the zoom
 // the way a width in metres would.
@@ -287,7 +295,8 @@ let mapYear = null;
 // Our own map, bottom to top: the historic water (painted over today's land), the outline of
 // the area covered, the streets of the year, and the names in use that year. Historic water has
 // three pieces per step: water in both this map and the next, water lost by the next map, and
-// water gained by it.
+// water gained by it. Every step has its own layers, all loaded at the start and shown by opacity:
+// swapping the data of one set of layers showed the next step's water for a moment.
 function addMapLayers() {
   // Today's parks, then the forest not yet cleared, both under today's ponds and rivers: a park
   // is forest until the land around it is cleared and stays green after.
@@ -301,10 +310,14 @@ function addMapLayers() {
   map.addLayer({ id: "old-land", type: "fill", source: "old-land", paint: { "fill-color": LAND_COLOR } });
   map.addSource("marsh", { type: "geojson", data: water.marsh });
   map.addLayer({ id: "marsh", type: "fill", source: "marsh", paint: { "fill-color": MARSH_COLOR } });
-  for (const part of ["common", "lost", "gained"]) {
-    map.addSource(`water-${part}`, { type: "geojson", data: EMPTY });
-    map.addLayer({ id: `water-${part}`, type: "fill", source: `water-${part}`, paint: { "fill-color": WATER_COLOR } });
-  }
+  water.steps.forEach((step, i) => {
+    for (const part of WATER_PARTS) {
+      map.addSource(`water-${i}-${part}`, { type: "geojson", data: step[part] });
+      map.addLayer({ id: `water-${i}-${part}`, type: "fill", source: `water-${i}-${part}`,
+        paint: { "fill-color": WATER_COLOR, "fill-opacity": 0 } });
+    }
+  });
+  for (const k of Object.keys(opacities)) delete opacities[k];
 
   map.addSource("area", { type: "geojson", data: area });
   map.addLayer({ id: "area", type: "line", source: "area",
@@ -347,7 +360,6 @@ function addMapLayers() {
         "text-max-width": 7 },
       paint: { "text-color": st.color, "text-halo-color": "rgba(250,248,242,0.85)", "text-halo-width": 1.5 } });
   }
-  waterStep = -1;
   mapYear = null;
   render();
 }
@@ -377,7 +389,7 @@ const fade = (year, [from, to]) => Math.min(1, Math.max(0, (year - from) / (to -
 // Sets the water for this year and returns the name of the map it comes from, or null once
 // today's shore is in place.
 function updateWater(year) {
-  if (!map.getLayer("water-common")) return null;
+  if (!map.getLayer("water-0-common")) return null;
   const steps = water.steps;
   let i = 0;
   while (i + 1 < steps.length && steps[i + 1].year <= year) i++;
@@ -389,14 +401,13 @@ function updateWater(year) {
   } else {
     k = fade(year, water.modernFade);
   }
-  if (i !== waterStep) {
-    waterStep = i;
-    for (const part of ["common", "lost", "gained"]) map.getSource(`water-${part}`).setData(cur[part]);
-  }
-  map.setPaintProperty("water-lost", "fill-opacity", 1 - k);
-  map.setPaintProperty("water-gained", "fill-opacity", k);
-  map.setPaintProperty("marsh", "fill-opacity", 1 - fade(year, water.marshFade));
-  map.setPaintProperty("old-land", "fill-opacity", 1 - fade(year, water.modernFade));
+  steps.forEach((_, j) => {
+    setOpacity(`water-${j}-common`, j === i ? 1 : 0);
+    setOpacity(`water-${j}-lost`, j === i ? 1 - k : 0);
+    setOpacity(`water-${j}-gained`, j === i ? k : 0);
+  });
+  setOpacity("marsh", 1 - fade(year, water.marshFade));
+  setOpacity("old-land", 1 - fade(year, water.modernFade));
   if (!next) return k < 1 ? cur.source : null;
   return k > 0.5 ? next.source : cur.source;
 }
