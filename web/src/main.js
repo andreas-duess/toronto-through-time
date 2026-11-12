@@ -6,6 +6,7 @@ import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
 import { TimeExtension } from "./time.js";
 import { landmarkParts, FACTS } from "./landmarks.js";
 import { fetchPacked, fetchMetres, fetchStarts, fetchPositions } from "./pack.js";
+import { loadTrees, treeMesh, TREE_COLORS } from "./trees.js";
 
 const $ = (id) => document.getElementById(id);
 const DATA = "./data/";
@@ -116,6 +117,9 @@ const map = new maplibregl.Map({
 });
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
 map.on("moveend", writeHash);
+// the trees come and go with the zoom
+let treesOn = 0;
+map.on("zoom", () => { if (meta && treeSets() !== treesOn) render(); });
 // taking hold of the map stops the story from moving it
 for (const type of ["mousedown", "wheel", "touchstart"]) {
   map.getCanvasContainer().addEventListener(type, () => {
@@ -129,6 +133,14 @@ for (const type of ["mousedown", "wheel", "touchstart"]) {
 const overlay = new MapboxOverlay({ interleaved: true, layers: [], effects: [LIGHTING], onClick: showBuilding });
 map.addControl(overlay);
 
+// Trees are today's only: they grow in over the last TREE_YEARS of the slider. A quarter of them
+// show from the first zoom of TREE_ZOOMS, half from the second and all from the third; while some
+// are left out, the others are drawn larger.
+const TREE_YEARS = 1;
+const TREE_ZOOMS = [13, 14.5, 15.5];
+const TREE_LARGER = [1.5, 1.25, 1];
+const TREE_MESH = treeMesh();
+let trees = null;
 let meta, buildings, years, heights, tiers, names, water, population, stops, streets, streetLabels, places, area, rail, sites, forest, parks, lost, addresses, landmarks;
 // buildings of the city's model that a hand-built landmark stands in for
 const replaced = new Set();
@@ -174,6 +186,8 @@ async function load() {
   render();
   if (map.isStyleLoaded()) addMapLayers(); else map.once("load", addMapLayers);
   $("loading").classList.add("done");
+  // the trees come after everything else; the page does not wait for them
+  loadTrees(DATA).then((t) => { trees = t; render(); }).catch(() => {});
 }
 
 // Buildings that are gone, read off the fire insurance plans. Absent if lost.json is.
@@ -233,6 +247,33 @@ function landmarkLayers() {
     updateTriggers: { getScale: Math.min(state.year, p.to) },
     material: MATERIAL,
     pickable: true,
+  }));
+}
+
+// how many of the three sets of trees show
+function treeSets() {
+  if (!trees || state.year <= meta.lastYear - TREE_YEARS) return 0;
+  return TREE_ZOOMS.filter((z) => map.getZoom() >= z).length;
+}
+
+function treeLayers() {
+  const sets = treeSets();
+  const grown = Math.min(1, (state.year - (meta.lastYear - TREE_YEARS)) / TREE_YEARS);
+  return trees.slice(0, sets).map((set, i) => new SimpleMeshLayer({
+    id: `trees-${i}`,
+    beforeId: map.getLayer("places-city") ? "places-city" : undefined,
+    data: set,
+    mesh: TREE_MESH,
+    coordinateSystem: COORDINATE_SYSTEM.LNGLAT_OFFSETS,
+    coordinateOrigin: meta.origin,
+    getPosition: (_, { index, target }) => {
+      target[0] = set.positions[index * 2]; target[1] = set.positions[index * 2 + 1]; target[2] = 0;
+      return target;
+    },
+    getScale: (_, { index }) => { const r = set.sizes[index] / 10; return [r, r, r]; },
+    getColor: (_, { index }) => TREE_COLORS[(index * 7919) % TREE_COLORS.length],
+    sizeScale: grown * TREE_LARGER[sets - 1],
+    material: MATERIAL,
   }));
 }
 
@@ -416,7 +457,8 @@ function render() {
   const y = Math.floor(state.year);
   const shore = updateWater(state.year);
   updateMap(state.year);
-  overlay.setProps({ layers: [...(lost ? [lostLayer()] : []), buildingLayer(), ...landmarkLayers()] });
+  overlay.setProps({ layers: [...(lost ? [lostLayer()] : []), buildingLayer(), ...landmarkLayers(), ...(trees ? treeLayers() : [])] });
+  treesOn = treeSets();
   writeHash();
 
   $("year-label").textContent = String(y);

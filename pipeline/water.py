@@ -66,10 +66,12 @@ OPEN_LAKE = [(-79.60, 43.50), (-79.60, 43.585), (-79.43, 43.603), (-79.39, 43.60
 MODERN_FADE = [1954, 1956]
 # The 1834 marsh at Ashbridge's Bay stays until the 1891 map takes over, which draws the bay as water.
 MARSH_FADE = [1883, 1891]
+# The Don's bend north of Winchester Street, which the maps of 1891 and 1894 draw differently.
+DON_BEND = [(-79.37, 43.6715), (-79.37, 43.676), (-79.35, 43.676), (-79.35, 43.6715)]
 # The harbour, the Port Lands and the lower Don, where every mapped year draws the water. Inside
 # this shape, the Island zone and the bar, the web map hides today's water (the ship channel, the
 # straightened Don, the slips) and shows only the water of the year, until today's shore takes over.
-HARBOUR = [(-79.405, 43.6335), (-79.405, 43.648), (-79.368, 43.655), (-79.368, 43.672), (-79.348, 43.672),
+HARBOUR = [(-79.405, 43.6335), (-79.405, 43.648), (-79.368, 43.655), (-79.368, 43.676), (-79.348, 43.676),
            (-79.348, 43.662), (-79.31, 43.668), (-79.31, 43.60), (-79.343, 43.60), (-79.343, 43.6335)]
 
 ISLAND = ROOT / "data" / "interim" / "island"
@@ -174,6 +176,10 @@ def frames(pads=True):
             out[year] = f.difference(zone).union(island_1858) if year <= 1909 else f.difference(zone_west)
         else:
             out[year] = f.difference(zone_west).union(zone_west.difference(island[drawn]))
+    # North of Winchester Street the 1891 map draws the Don straight, the 1894 map with its old
+    # bend, the 1909 map straight again. The bend stays until 1909.
+    bend = to_utm(DON_BEND)
+    out[1891] = out[1891].difference(bend).union(out[1894].intersection(bend))
     if pads:
         built, built_year = standing(shapely.union_all(list(out.values())))
         steps = sorted(out)

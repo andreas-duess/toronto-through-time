@@ -30,6 +30,7 @@ uv run --with pillow --with scipy --with rasterio pipeline/plans.py   # outlines
 uv run --with pillow --with scipy --with rasterio pipeline/plans.py --area island    # and --area trinity
 uv run --with pillow --with scipy --with rasterio pipeline/island.py   # Island outline 1913, 1924; then water.py again
 uv run --with rasterio pipeline/lost.py    # lost buildings; then run build.py, streets.py and this once more
+uv run --with rasterio --with pyogrio --with scipy pipeline/trees.py   # today's trees, from the city's canopy study
 uv run pipeline/pack.py        # last: small copies of the building files for the page
 ```
 

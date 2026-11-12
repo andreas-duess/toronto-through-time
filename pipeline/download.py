@@ -38,6 +38,8 @@ RESOURCES = {
 BY_NAME = {
     "former_municipalities.geojson": ("former-municipality-boundaries", "4326.geojson"),
     "green_spaces.geojson": ("green-spaces", "4326.geojson"),
+    # land cover from satellite images and lidar, for today's trees (pipeline/trees.py); 440 MB
+    "landcover_2018.zip": ("forest-and-land-cover", "2018 Tree Canopy Study Geodatabase"),
 }
 
 
