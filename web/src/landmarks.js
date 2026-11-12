@@ -172,6 +172,45 @@ function bmoField({ pitch, stands }) {
   return { base: base.build(), deck: deck.build(), roof: roof.build() };
 }
 
+// The old Trinity College, Queen Street West. Source: built 1851 to Kivas Tully's design, opened
+// January 1852, demolished in the 1950s. The footprint is the one on Goad's plan of 1913. Every
+// height, and the tower and turrets on the south front, are judged from an early postcard view:
+// three storeys under steep roofs, a tall central tower with a lantern, smaller turrets beside
+// it and at the ends.
+function trinityCollege({ outline, roof, front }) {
+  const EAVES = 11, RIDGE = 15.5;
+  const m = new Mesh().color("#d9cfb8");
+  m.prism(outline, 0, EAVES);
+  m.color("#7c8087").prism(roof, EAVES, RIDGE);
+  // along the front and into the building
+  const [a, b] = front;
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const along = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
+  let inward = [-along[1], along[0]];
+  const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  if (inward[0] * -mid[0] + inward[1] * -mid[1] < 0) inward = [along[1], -along[0]];
+  const turn = Math.atan2(along[1], along[0]);
+  const at = (s, d) => [mid[0] + along[0] * s + inward[0] * d, mid[1] + along[1] * s + inward[1] * d];
+  const tower = (s, d, r, top, sides) => {
+    const [x, y] = at(s, d);
+    const shaft = new Mesh();
+    shaft.rgb = m.rgb;
+    shaft.lathe([[r, 0], [r, top * 0.8], [r * 0.72, top * 0.8], [r * 0.72, top * 0.93]], sides, turn + Math.PI / sides);
+    m.positions.push(...shaft.positions.map((v, i) => v + (i % 3 === 0 ? x : i % 3 === 1 ? y : 0)));
+    m.normals.push(...shaft.normals);
+    m.colors.push(...shaft.colors);
+    const cap = new Mesh().color("#7c8087").lathe([[r * 0.8, top * 0.93], [0.05, top]], sides, turn + Math.PI / sides);
+    m.positions.push(...cap.positions.map((v, i) => v + (i % 3 === 0 ? x : i % 3 === 1 ? y : 0)));
+    m.normals.push(...cap.normals);
+    m.colors.push(...cap.colors);
+  };
+  m.color("#d9cfb8");
+  tower(0, 7, 4.2, 31, 8);                                   // central tower with its lantern
+  for (const s of [-7, 7]) tower(s, 3, 1.6, 22, 8);          // turrets beside the entrance
+  for (const s of [-0.3, 0.3]) tower(s * len, 4, 1.8, 19, 8); // and towards the ends of the front
+  return m.build();
+}
+
 // One entry per piece that has its own dates: built from `from` (work starts) to `to` (finished).
 export function landmarkParts(data) {
   const bmo = bmoField(data.bmoField);
@@ -181,6 +220,9 @@ export function landmarkParts(data) {
     { id: "bmo-field", key: "bmoField", mesh: bmo.base, from: 2006.73, to: 2007.33 },
     { id: "bmo-field-deck", key: "bmoField", mesh: bmo.deck, from: 2014.7, to: 2015.33 },
     { id: "bmo-field-roof", key: "bmoField", mesh: bmo.roof, from: 2015.7, to: 2016.33 },
+    // gone: until
+    ...(data.trinityCollege ? [{ id: "trinity-college", key: "trinityCollege", mesh: trinityCollege(data.trinityCollege),
+      from: 1851, to: 1852, until: 1956 }] : []),
   ].map((p) => ({ ...p, origin: data[p.key].origin }));
 }
 
@@ -194,6 +236,11 @@ export const FACTS = {
     ["Built", "1986 to 1989; opened 3 June 1989 as SkyDome"],
     ["Height", "86 m to the top of the roof"],
     ["Model", "Outline from OpenStreetMap; roof curve judged from photographs; shown with the roof closed"],
+  ] },
+  trinityCollege: { name: "Trinity College (original building)", url: "https://en.wikipedia.org/wiki/Trinity_College,_Toronto", replaces: [], rows: [
+    ["Built", "1851; opened January 1852. The college moved to Hoskin Avenue in 1925"],
+    ["Gone", "Demolished in the 1950s; shown until 1956"],
+    ["Model", "Footprint from Goad's fire insurance plan of 1913; heights, tower and turrets judged from a postcard view"],
   ] },
   bmoField: { name: "BMO Field", url: "https://en.wikipedia.org/wiki/BMO_Field", replaces: [], rows: [
     ["Built", "Opened 2007; east upper deck 2015; roof 2016"],

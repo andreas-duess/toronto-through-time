@@ -210,7 +210,7 @@ function lostLayer() {
 
 // Hand-built landmarks: each part rises while it is being built.
 function landmarkLayers() {
-  return landmarks.filter((p) => state.year >= p.from).map((p) => new SimpleMeshLayer({
+  return landmarks.filter((p) => state.year >= p.from && state.year < (p.until ?? 9999)).map((p) => new SimpleMeshLayer({
     id: `landmark-${p.id}`,
     beforeId: map.getLayer("places-city") ? "places-city" : undefined,
     data: [p],

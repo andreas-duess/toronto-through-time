@@ -55,6 +55,7 @@ ROAD_HALF_M = 6   # half the width of a street that buildings are kept off
 COVERED_M = 60    # a plan covers a place if it shows a building this near
 ESTIMATE = 5      # build.py's tier for a year that is only an estimate
 LOW_M = 15        # a taller undated building is not taken for the one on the plans
+ISLAND_MAX_M2 = 2500
 NEAR_M = 200
 HEIGHTS = {"wood": 6.5, "brick": 10.0}  # metres; about two and three storeys
 
@@ -215,7 +216,22 @@ if __name__ == "__main__":
         cen = shapely.centroid(plans[y].geometry.values)
         # (not for the places read separately: the Island has no streets in the city's file, and
         # Trinity College stood back from them)
-        dry = plans[y][~shapely.contains(wet, cen) & (shapely.contains(near_street, cen) | plans[y].island.values)].reset_index(drop=True)
+        keep = ~shapely.contains(wet, cen) & (shapely.contains(near_street, cen) | plans[y].island.values)
+        # On the Island plates: only what stands on the Island's land of that plan, and nothing
+        # bigger than a hotel. The plates lie on the index map, whose coloured strips and red
+        # lines across the harbour would otherwise be read as buildings.
+        shore = ROOT / "data" / "interim" / "island" / f"{y}.geojson"
+        if shore.exists():
+            land = gpd.read_file(shore).geometry.iloc[0].buffer(-4)
+            box = gpd.GeoSeries([shapely.box(-79.405, 43.609, -79.348, 43.636)], crs=4326).to_crs(UTM).iloc[0]
+            on_plate = plans[y].island.values & shapely.contains(box, cen)
+            # ... and nothing long and thin: the plates' red survey lines
+            rect = shapely.minimum_rotated_rectangle(plans[y].geometry.values)
+            sides = shapely.get_coordinates(shapely.get_exterior_ring(rect)).reshape(-1, 5, 2)
+            a, b = np.hypot(*(sides[:, 1] - sides[:, 0]).T), np.hypot(*(sides[:, 2] - sides[:, 1]).T)
+            thin = np.maximum(a, b) > 5 * np.maximum(np.minimum(a, b), 1)
+            keep &= ~on_plate | (shapely.contains(land, cen) & (plans[y].geometry.area.values <= ISLAND_MAX_M2) & ~thin)
+        dry = plans[y][keep].reset_index(drop=True)
         # and no small outline standing alone: specks of plan lettering and lines, not sheds
         cen = np.c_[dry.geometry.centroid.x, dry.geometry.centroid.y]
         area = dry.geometry.area.values
@@ -316,10 +332,22 @@ if __name__ == "__main__":
     zone_names = []
     cen = lost.geometry.centroid.to_crs(4326)
     drop = np.zeros(len(lost), bool)
+    made = json.loads((OUT / "landmarks.json").read_text())
+    models = {}
+    if "trinityCollege" in made:
+        t = made["trinityCollege"]
+        east = 111320 * np.cos(np.radians(t["origin"][1]))
+        ring = [(t["origin"][0] + x / east, t["origin"][1] + y / 111132) for x, y in t["outline"]]
+        models["trinity_college"] = gpd.GeoSeries([shapely.Polygon(ring)], crs=4326).to_crs(UTM).iloc[0].buffer(8)
     for r in csv.DictReader((ROOT / "data" / "manual" / "lost_zones.csv").open()):
         inside = ((cen.x >= float(r["lon_min"])) & (cen.x < float(r["lon_max"]))
                   & (cen.y >= float(r["lat_min"])) & (cen.y < float(r["lat_max"]))).values
         if not r["gone_from"]:
+            drop |= inside
+            continue
+        if r["zone"] in models:
+            # The web map builds this one by hand, so nothing from the plans is drawn in the zone.
+            # (Here the plates overlap an inset at another scale, which reads as stray blocks.)
             drop |= inside
             continue
         early = inside & lost.guess.values & (lost.plan.values < len(years) - 1) & ~lost.kept.values

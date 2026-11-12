@@ -29,6 +29,9 @@ YEARS = [1913, 1924]
 BOX = (-79.418, 43.606, -79.343, 43.6345)   # lon/lat around the Island
 Z = 16            # about 1.7 m of ground per pixel
 MIN_HA = 1
+# Where the index map's gutter crosses the Island (lon/lat, read off the strips it left; hand-placed)
+GUTTER = [[(-79.3777, 43.6375), (-79.3752, 43.6335), (-79.3614, 43.6111), (-79.3590, 43.6072)],
+          [(-79.3673, 43.6225), (-79.3668, 43.6185), (-79.3659, 43.6111), (-79.3655, 43.6075)]]
 EARTH = 20037508.342789244
 
 
@@ -79,7 +82,27 @@ if __name__ == "__main__":
         shapes = [shapely.geometry.shape(g) for g, v in rasterio.features.shapes(land.astype(np.uint8), mask=land, transform=transform)]
         g = gpd.GeoSeries(shapes, crs=3857).intersection(zone).to_crs(water.UTM)
         g = g[g.area >= MIN_HA * 1e4]
-        island = shapely.simplify(shapely.union_all(g.values).buffer(0), 4)
+        # not land: long thin strips, which are the red lines the index map rules across the harbour
+        box = shapely.minimum_rotated_rectangle(g.values)
+        short = np.array([min(shapely.length(shapely.LineString(b.exterior.coords[i:i + 2])) for i in (0, 1)) for b in box])
+        g = g[(short >= 45) | (g.area.values / shapely.area(box) >= 0.5) & (short >= 30)]
+        island = shapely.union_all(g.values).buffer(0)
+        # land narrower than about 28 m goes: with it go the red lines ruled across the harbour
+        # (and, wrongly, the narrowest spits)
+        island = island.buffer(-14).buffer(14)
+        parts = shapely.get_parts(island)
+        rect = shapely.minimum_rotated_rectangle(parts)
+        sides = shapely.get_coordinates(shapely.get_exterior_ring(rect)).reshape(-1, 5, 2)
+        a, b = np.hypot(*(sides[:, 1] - sides[:, 0]).T), np.hypot(*(sides[:, 2] - sides[:, 1]).T)
+        ruled = (np.minimum(a, b) < 70) & (np.maximum(a, b) > 6 * np.minimum(a, b))
+        island = shapely.union_all(parts[~ruled])
+        # The gutter of the index map (a red line with stained paper beside it) reads as a strip
+        # of land running out into the harbour and the lake. Along it, land is kept only where
+        # there is other land close by on either side.
+        gutter = shapely.union_all(gpd.GeoSeries([shapely.LineString(line) for line in GUTTER], crs=4326)
+                                   .to_crs(water.UTM).buffer(110).values)
+        beside = island.difference(gutter).buffer(-20).buffer(20 + 140)
+        island = shapely.simplify(island.difference(gutter.difference(beside)).buffer(-14).buffer(14), 4)
         gpd.GeoSeries([island], crs=water.UTM).to_file(OUT / f"{year}.geojson", driver="GeoJSON")
         print(year, f"{island.area / 1e4:.0f} ha in {len(shapely.get_parts(island))} pieces; plates cover {1 - blank.mean():.0%}", flush=True)
         shade = rgb.copy()
