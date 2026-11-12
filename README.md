@@ -75,6 +75,8 @@ returns a mesh, an entry in `landmarkParts` with its construction years, and an 
   150 m.
 - Parks are today's, shown green in every year once the forest around them is cleared.
 - Not drawn: creeks. Today's Don River channel and today's ponds show in every year.
+- Cast shadows are written (`web/src/sun.js`) but off (`SHADOWS` in `web/src/main.js`): with them on, clicking a
+  building finds nothing and the frame rate about halves.
 - The water is historic from 1834 to 1931 (`pipeline/water.py`, sources and hand-made parts listed
   at the top of that file); today's shore takes over in 1954 to 1956 (no map in between is used). In the harbour, the Port Lands and the lower Don only the water of the year is drawn; elsewhere today's water shows in every year.
 - Courtyards are filled in.

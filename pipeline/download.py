@@ -57,6 +57,10 @@ OVERPASS = {
     "osm/landmarks.json": '[out:json][timeout:60];(nwr(43.6318,-79.4205,43.6346,-79.4165)'
                           '[~"^(leisure|building|man_made|sport)$"~"."];nwr(43.6405,-79.3915,43.6435,-79.3860)'
                           '[name~"CN Tower|Rogers Centre"];);out tags geom;',
+    # places of worship, and the parts of buildings mapped in 3D (towers, spires), for the churches
+    "osm/worship.json": f'[out:json][timeout:150];(way[amenity=place_of_worship]{BOX};relation[amenity=place_of_worship]{BOX};'
+                        f'way[building~"^(church|cathedral|chapel|synagogue|mosque|temple)$"]{BOX};);out tags geom;',
+    "osm/parts.json": f'[out:json][timeout:150];way["building:part"][height]{BOX};out tags geom;',
     # railway lines and the outline of Fort York
     "osm/rail_fort.json": '[out:json][timeout:90];(way[railway~"^(rail|abandoned|disused|razed)$"]'
                           f'{BOX};way(1416813033););out tags geom;',

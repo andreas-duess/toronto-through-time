@@ -1,12 +1,13 @@
 import maplibregl from "maplibre-gl";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { COORDINATE_SYSTEM, LightingEffect, AmbientLight, DirectionalLight } from "@deck.gl/core";
+import { COORDINATE_SYSTEM } from "@deck.gl/core";
 import { SolidPolygonLayer } from "@deck.gl/layers";
 import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
 import { TimeExtension } from "./time.js";
 import { landmarkParts, FACTS } from "./landmarks.js";
 import { fetchPacked, fetchMetres, fetchStarts, fetchPositions } from "./pack.js";
 import { loadTrees, treeMesh, TREE_COLORS } from "./trees.js";
+import { SunEffect, today, sunAt, clock } from "./sun.js";
 
 const $ = (id) => document.getElementById(id);
 const DATA = "./data/";
@@ -17,15 +18,19 @@ const NEW_SPAN = 6;
 const OLD_COLOR = [214, 205, 190];
 const NEW_COLOR = [217, 84, 43];
 const NEW_TINT = NEW_COLOR.map((c, i) => c / OLD_COLOR[i]);
-const riseExtension = new TimeExtension({ mode: "rise" });
-// An afternoon sun from the south-south-west and a weak light from the east, so that every side of
-// a building has its own tone and none is washed out.
-const LIGHTING = new LightingEffect({
-  ambient: new AmbientLight({ color: [255, 255, 255], intensity: 1 }),
-  sun: new DirectionalLight({ color: [255, 250, 240], intensity: 1.2, direction: [0.5, 0.8, -1] }),
-  fill: new DirectionalLight({ color: [235, 240, 255], intensity: 0.3, direction: [-1, -0.3, -0.6] }),
-});
-const MATERIAL = { ambient: 0.55, diffuse: 0.5, shininess: 8, specularColor: [0, 0, 0] };
+// The light is the sun over Toronto today, at the time of day on the sun slider: the time it is
+// now, or mid-afternoon when the sun is down.
+// Cast shadows are written but switched off. With them on (true), clicking a building finds
+// nothing (deck.gl's picking comes back empty once its shadow module is in the shaders) and the
+// frame rate about halves; neither is solved. See sun.js.
+const SHADOWS = false;
+const day = today();
+const sun = { minute: day.now >= day.first && day.now <= day.last ? day.now : Math.min(day.last, 15 * 60), live: true };
+Object.assign(sun, sunAt(day, sun.minute));
+const LIGHTING = new SunEffect(sun, SHADOWS);
+// with shadows the sides away from the sun are darkened by the shadow; without, by less light
+const MATERIAL = { ambient: SHADOWS ? 0.72 : 0.56, diffuse: 0.5, shininess: 8, specularColor: [0, 0, 0] };
+const riseExtension = new TimeExtension({ mode: "rise", shadows: SHADOWS });
 const LOST_COLOR = [120, 94, 74];
 const TIER_COLORS = {
   landmark: [44, 123, 182],
@@ -120,6 +125,9 @@ map.on("moveend", writeHash);
 // the trees come and go with the zoom
 let treesOn = 0;
 map.on("zoom", () => { if (meta && treeSets() !== treesOn) render(); });
+// and so do the batches of buildings, with the view
+let drawn = "";
+map.on("move", () => { if (buildings && drawnKey() !== drawn) render(); });
 // taking hold of the map stops the story from moving it
 for (const type of ["mousedown", "wheel", "touchstart"]) {
   map.getCanvasContainer().addEventListener(type, () => {
@@ -132,6 +140,15 @@ for (const type of ["mousedown", "wheel", "touchstart"]) {
 
 const overlay = new MapboxOverlay({ interleaved: true, layers: [], effects: [LIGHTING], onClick: showBuilding });
 map.addControl(overlay);
+// What the sun sees is drawn before the map starts on its frame (sun.js). The map has no hook
+// there, so its painter is wrapped; it is told afterwards that the drawing state has changed.
+if (SHADOWS) {
+  const paint = map.painter.render.bind(map.painter);
+  map.painter.render = (...args) => {
+    if (LIGHTING.drawEarly(overlay._deck, map, { nearZ: map.transform.nearZ, farZ: map.transform.farZ })) map.painter.context.setDirty();
+    return paint(...args);
+  };
+}
 
 // Trees are today's only: they grow in over the last TREE_YEARS of the slider. A quarter of them
 // show from the first zoom of TREE_ZOOMS, half from the second and all from the third; while some
@@ -144,6 +161,59 @@ let trees = null;
 let meta, buildings, years, heights, tiers, names, water, population, stops, streets, streetLabels, places, area, rail, sites, forest, parks, lost, addresses, landmarks;
 // buildings of the city's model that a hand-built landmark stands in for
 const replaced = new Set();
+
+// Buildings are drawn in batches: those that stand at about the same time in the same part of the
+// city. A year and a view then only cost the batches standing in that year and lying in that view,
+// which matters because every building is drawn a second time for the shadows.
+// groups: [{ ids (building numbers), since, until }], split here by where the buildings are.
+// starts and positions are the packed polygons, `size` numbers per corner.
+const TILES = [5, 3];   // across and up
+function batches(groups, starts, positions, size) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < positions.length; i += size) {
+    x0 = Math.min(x0, positions[i]); x1 = Math.max(x1, positions[i]);
+    y0 = Math.min(y0, positions[i + 1]); y1 = Math.max(y1, positions[i + 1]);
+  }
+  const out = [];
+  for (const group of groups) {
+    const tiles = Array.from({ length: TILES[0] * TILES[1] }, () => []);
+    for (const id of group.ids) {
+      const tx = Math.min(TILES[0] - 1, Math.floor(((positions[starts[id] * size] - x0) / (x1 - x0)) * TILES[0]));
+      const ty = Math.min(TILES[1] - 1, Math.floor(((positions[starts[id] * size + 1] - y0) / (y1 - y0)) * TILES[1]));
+      tiles[ty * TILES[0] + tx].push(id);
+    }
+    for (const ids of tiles) {
+      if (!ids.length) continue;
+      const startIndices = new Uint32Array(ids.length + 1);
+      ids.forEach((id, i) => { startIndices[i + 1] = startIndices[i] + starts[id + 1] - starts[id]; });
+      const value = new Float32Array(startIndices[ids.length] * size);
+      ids.forEach((id, i) => value.set(positions.subarray(starts[id] * size, starts[id + 1] * size), startIndices[i] * size));
+      // the box around the batch, in degrees from the map's origin
+      const box = [Infinity, Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < value.length; i += size) {
+        box[0] = Math.min(box[0], value[i]); box[2] = Math.max(box[2], value[i]);
+        box[1] = Math.min(box[1], value[i + 1]); box[3] = Math.max(box[3], value[i + 1]);
+      }
+      out.push({ key: out.length, ids: Uint32Array.from(ids), since: group.since, until: group.until, box,
+        data: { length: ids.length, startIndices, attributes: { getPolygon: { value, size } } } });
+    }
+  }
+  return out;
+}
+
+// The batches standing in the year and in view. Buildings beyond the edge of the view still
+// throw shadows into it, so the view is taken wider by MARGIN degrees (about 500 m).
+const MARGIN = 0.005;
+function inView(list) {
+  const b = map.getBounds();
+  const [ox, oy] = meta.origin;
+  const w = b.getWest() - ox - MARGIN, e = b.getEast() - ox + MARGIN, s = b.getSouth() - oy - MARGIN, n = b.getNorth() - oy + MARGIN;
+  return list.filter((t) => t.since <= state.year && state.year < t.until && t.box[0] <= e && t.box[2] >= w && t.box[1] <= n && t.box[3] >= s);
+}
+// which batches are drawn, to see when moving the map changes them
+const drawnKey = () => [buildings, lost?.batches ?? []].map((list) => inView(list).map((t) => t.key).join(",")).join("|");
+
+const BUILT_GROUPS = 5;
 
 async function load() {
   meta = await fetchJson("meta.json");
@@ -166,11 +236,16 @@ async function load() {
     fetchJson("forest.json"),
     fetchJson("parks.json"),
   ]);
-  buildings = {
-    length: meta.count,
-    startIndices: starts,
-    attributes: { getPolygon: { value: positions, size: 3 } },
-  };
+  // today's buildings are in order of their year: groups of about as many corners each
+  const groups = [];
+  for (let k = 0, from = 0; k < BUILT_GROUPS; k++) {
+    let to = from;
+    while (to < meta.count && starts[to] < (starts[meta.count] * (k + 1)) / BUILT_GROUPS) to++;
+    if (k === BUILT_GROUPS - 1) to = meta.count;
+    if (to > from) groups.push({ ids: Uint32Array.from({ length: to - from }, (_, i) => from + i), since: years[from], until: Infinity });
+    from = to;
+  }
+  buildings = batches(groups, starts, positions, 3);
   lost = await loadLost();
   landmarks = landmarkParts(await fetchJson("landmarks.json"));
   const standIns = new Set(Object.values(FACTS).flatMap((f) => f.replaces));
@@ -201,35 +276,50 @@ async function loadLost() {
     fetchMetres(DATA + "lost.heights.pack"),
     fetchPacked(DATA + "lost.info.pack", Uint8Array),
   ]);
-  return { ...info, span, tall, about,
-    data: { length: info.count, startIndices: starts, attributes: { getPolygon: { value: positions, size: 2 } } } };
+  // groups of lost buildings that went at about the same time and, within those, came at about
+  // the same time
+  const order = Uint32Array.from({ length: info.count }, (_, i) => i).sort((a, b) => span[a * 4 + 1] - span[b * 4 + 1]);
+  const GONE = 4, BUILT = 2, groups = [];
+  for (let g = 0; g < GONE; g++) {
+    const g0 = Math.floor((info.count * g) / GONE), g1 = Math.floor((info.count * (g + 1)) / GONE);
+    order.subarray(g0, g1).sort((a, b) => span[a * 4] - span[b * 4]);
+    for (let k = 0; k < BUILT; k++) {
+      const ids = order.slice(g0 + Math.floor(((g1 - g0) * k) / BUILT), g0 + Math.floor(((g1 - g0) * (k + 1)) / BUILT));
+      if (!ids.length) continue;
+      let until = 0;
+      for (const id of ids) until = Math.max(until, span[id * 4 + 1]);
+      groups.push({ ids, since: span[ids[0] * 4], until });
+    }
+  }
+  return { ...info, span, tall, about, batches: batches(groups, starts, positions, 2) };
 }
 
-function lostLayer() {
-  return new SolidPolygonLayer({
-    id: "lost",
+function lostLayers() {
+  return inView(lost.batches).map((b) => new SolidPolygonLayer({
+    id: `lost-${b.key}`,
     beforeId: map.getLayer("places-city") ? "places-city" : undefined,
-    data: lost.data,
+    data: b.data,
     positionFormat: "XY",
     coordinateSystem: COORDINATE_SYSTEM.LNGLAT_OFFSETS,
     coordinateOrigin: meta.origin,
     _normalize: false,
     _windingOrder: "CCW",
     extruded: true,
-    getElevation: (_, { index }) => lost.tall[index],
+    getElevation: (_, { index }) => lost.tall[b.ids[index]],
     getFillColor: state.quality ? LOST_COLOR : OLD_COLOR,
     updateTriggers: { getFillColor: state.quality },
     material: MATERIAL,
     pickable: true,
     autoHighlight: true,
     highlightColor: [255, 255, 255, 90],
-    getYears: (_, { index, target }) => { for (let k = 0; k < 4; k++) target[k] = lost.span[index * 4 + k]; return target; },
+    getYears: (_, { index, target }) => { for (let k = 0; k < 4; k++) target[k] = lost.span[b.ids[index] * 4 + k]; return target; },
     currentYear: state.year,
     growYears: RISE_YEARS,
     tint: state.quality ? [1, 1, 1] : NEW_TINT,
     tintYears: NEW_SPAN,
+    sunDirection: sun.direction,
     extensions: [riseExtension],
-  });
+  }));
 }
 
 // Hand-built landmarks: each part rises while it is being built.
@@ -277,26 +367,40 @@ function treeLayers() {
   }));
 }
 
-function buildingLayer() {
+// An unseen sheet over the ground, which takes the shadows of the buildings and trees.
+function groundLayer() {
   return new SolidPolygonLayer({
-    id: "buildings",
+    id: "ground",
+    beforeId: map.getLayer("places-city") ? "places-city" : undefined,
+    data: [[[-79.7, 43.5], [-79.1, 43.5], [-79.1, 43.85], [-79.7, 43.85]]],
+    getPolygon: (d) => d,
+    getFillColor: [0, 0, 0, 0],
+    material: false,
+    parameters: { depthWriteEnabled: false },
+  });
+}
+
+function buildingLayers() {
+  return inView(buildings).map((b) => new SolidPolygonLayer({
+    id: `buildings-${b.key}`,
     // drawn inside the map, over the street names and under the place names
     beforeId: map.getLayer("places-city") ? "places-city" : undefined,
-    data: buildings,
+    data: b.data,
     coordinateSystem: COORDINATE_SYSTEM.LNGLAT_OFFSETS,
     coordinateOrigin: meta.origin,
     _normalize: false,
     _windingOrder: "CCW",
     extruded: true,
-    getElevation: (_, { index }) => heights[index],
-    getFillColor: state.quality ? (_, { index }) => TIER_COLORS[meta.tiers[tiers[index]]] : OLD_COLOR,
+    getElevation: (_, { index }) => heights[b.ids[index]],
+    getFillColor: state.quality ? (_, { index }) => TIER_COLORS[meta.tiers[tiers[b.ids[index]]]] : OLD_COLOR,
     updateTriggers: { getFillColor: state.quality },
     material: MATERIAL,
     pickable: true,
     autoHighlight: true,
     highlightColor: [255, 255, 255, 90],
     getYears: (_, { index, target }) => {
-      target[0] = replaced.has(index) ? 9999 : years[index];
+      const id = b.ids[index];
+      target[0] = replaced.has(id) ? 9999 : years[id];
       target[1] = 9999; target[2] = 0; target[3] = 0;
       return target;
     },
@@ -304,8 +408,9 @@ function buildingLayer() {
     growYears: RISE_YEARS,
     tint: state.quality ? [1, 1, 1] : NEW_TINT,
     tintYears: NEW_SPAN,
+    sunDirection: sun.direction,
     extensions: [riseExtension],
-  });
+  }));
 }
 
 // Each mapped shore blends into the next over the years before the next map, this many at most.
@@ -457,8 +562,9 @@ function render() {
   const y = Math.floor(state.year);
   const shore = updateWater(state.year);
   updateMap(state.year);
-  overlay.setProps({ layers: [...(lost ? [lostLayer()] : []), buildingLayer(), ...landmarkLayers(), ...(trees ? treeLayers() : [])] });
+  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(lost ? lostLayers() : []), ...buildingLayers(), ...landmarkLayers(), ...(trees ? treeLayers() : [])] });
   treesOn = treeSets();
+  drawn = drawnKey();
   writeHash();
 
   $("year-label").textContent = String(y);
@@ -510,7 +616,30 @@ function setPlaying(on) {
   requestAnimationFrame(tick);
 }
 
+// The sun slider: the time of day, today, between sunrise and sunset. Left alone it follows the clock.
+function setSun(minute, live) {
+  Object.assign(sun, sunAt(day, minute), { minute, live });
+  LIGHTING.setSun(sun);
+  $("sun-time").textContent = clock(minute);
+  $("sun-slider").value = String(minute);
+  $("sun-now").hidden = live;
+  render();
+}
+
+function setupSun() {
+  const slider = $("sun-slider");
+  slider.min = String(day.first);
+  slider.max = String(day.last);
+  slider.addEventListener("input", () => setSun(Number(slider.value), false));
+  const now = () => { const t = today().now; return t >= day.first && t <= day.last ? t : null; };
+  $("sun-now").addEventListener("click", () => setSun(now() ?? sun.minute, true));
+  setInterval(() => { if (sun.live && now() !== null && now() !== sun.minute) setSun(now(), true); }, 30000);
+  setSun(sun.minute, true);
+  $("sun").hidden = false;
+}
+
 function setupControls() {
+  setupSun();
   const slider = $("slider");
   slider.min = String(meta.firstYear);
   slider.max = String(meta.lastYear);
@@ -672,12 +801,14 @@ function showBuilding(info) {
     const fact = FACTS[info.object.key];
     return showInfo(fact.name, [...fact.rows, ["More", `<a href="${fact.url}" target="_blank" rel="noopener">article</a>`]]);
   }
-  if (!info.picked || info.index < 0 || !["buildings", "lost"].includes(info.layer?.id)) {
+  const [kind, key] = (info.layer?.id ?? "").split("-");
+  if (!info.picked || info.index < 0 || !["buildings", "lost"].includes(kind)) {
     $("info").hidden = true;
     return;
   }
-  const i = info.index;
-  if (info.layer.id === "lost") {
+  // the building's place in the batch, back to its number
+  const i = (kind === "lost" ? lost.batches : buildings)[Number(key)].ids[info.index];
+  if (kind === "lost") {
     const [brick, plan, estimated] = lost.about.subarray(i * 3, i * 3 + 3);
     const [built, gone, kept, stays] = lost.span.subarray(i * 4, i * 4 + 4);
     // a piece that takes over from the plan before, or hands over to the next, has no date of its own
@@ -724,3 +855,5 @@ load();
 window.__map = map;
 window.__state = state;
 window.__story = story;
+window.__lighting = LIGHTING;
+window.__overlay = overlay;

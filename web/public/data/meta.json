@@ -1,6 +1,6 @@
 {
- "count": 105469,
- "vertices": 1161537,
+ "count": 106358,
+ "vertices": 1167029,
  "origin": [
   -79.39,
   43.66
@@ -16,11 +16,11 @@
  "firstYear": 1793,
  "lastYear": 2026,
  "countsByTier": {
-  "landmark": 1123,
-  "heritage": 4293,
-  "apartment": 2271,
-  "permit": 5787,
-  "massing": 1594,
-  "estimate": 90401
+  "landmark": 1284,
+  "heritage": 4510,
+  "apartment": 2269,
+  "permit": 5793,
+  "massing": 1661,
+  "estimate": 90841
  }
 }

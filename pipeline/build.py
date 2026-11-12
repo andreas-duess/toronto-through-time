@@ -25,6 +25,7 @@ import numpy as np
 import openpyxl
 import pandas as pd
 import shapely
+import shapely.affinity
 
 import water
 from scipy.spatial import cKDTree
@@ -89,8 +90,132 @@ def load_buildings():
     # from site plans and 3D models, so the source marks the newer ones.
     b["newer_source"] = b.BLDG_SRC != "Photogrammetrics"
     b = b[b.area >= 8].reset_index(drop=True)
+    b = churches(b)
     log(f"buildings in old Toronto: {len(b):,} polygons")
-    return b[["base", "top", "area", "newer_source", "geometry"]], old
+    return b[["base", "top", "area", "newer_source", "church", "part_of", "geometry"]], old
+
+
+# ---------------------------------------------------------------- churches
+
+SPIRE_STEPS = 5      # a spire is drawn as this many blocks, each smaller than the one below
+POINTED = ("pyramidal", "dome", "onion", "cone", "round", "hipped")
+
+
+def osm_polygons(name):
+    """Closed ways of an Overpass file as polygons (UTM), with their tags."""
+    rows = []
+    for e in json.loads((RAW / "osm" / name).read_text())["elements"]:
+        ring = [(n["lon"], n["lat"]) for n in e.get("geometry", [])]
+        if len(ring) >= 4 and ring[0] == ring[-1]:
+            rows.append({**e["tags"], "geometry": shapely.Polygon(ring)})
+    g = gpd.GeoDataFrame(rows, geometry="geometry", crs=4326).to_crs(UTM)
+    g["geometry"] = g.geometry.buffer(0)
+    return g[~g.geometry.is_empty].reset_index(drop=True)
+
+
+def metres(value):
+    try:
+        return float(str(value).replace("m", "").strip())
+    except ValueError:
+        return np.nan
+
+
+def spire(shape, foot, tip):
+    """Blocks standing in for a pointed roof over a shape, from foot to tip."""
+    centre = shape.centroid
+    rows = []
+    for k in range(SPIRE_STEPS):
+        size = 1 - (k + 0.5) / SPIRE_STEPS
+        rows.append({"base": foot + (tip - foot) * k / SPIRE_STEPS, "top": foot + (tip - foot) * (k + 1) / SPIRE_STEPS,
+                     "geometry": shapely.affinity.scale(shape, size, size, origin=centre)})
+    return rows
+
+
+def churches(b):
+    """Gives churches a body and a tower in place of one block as tall as the spire.
+
+    The city's model has one outline per church with the height of its highest point, so St.
+    James' Cathedral stood as a 71 m block. A church here is a building on a place of worship in
+    OpenStreetMap. Its outline goes down to the model's average height, the body of the church.
+    Towers and spires come from OpenStreetMap where it has the building's parts with heights
+    (St. James': the tower, the spire to 93 m, the nave). Elsewhere a small outline of the model
+    that is itself the tower keeps its height with a spire on top, and a church with neither gets
+    a tower at the street end of its long side, as tall as the model's highest point: a guess at
+    where the tower stands.
+    """
+    worship = osm_polygons("worship.json")
+    parts = osm_polygons("parts.json")
+    b["church"] = False
+    bi, wi = worship.sindex.query(b.geometry, predicate="intersects")
+    inside = shapely.area(shapely.intersection(b.geometry.values[bi], worship.geometry.values[wi])) > 0.5 * b.area.values[bi]
+    site = pd.Series(wi[inside], index=b.index[bi[inside]])
+    site = site[~site.index.duplicated()]
+    b.loc[site.index, "church"] = True
+    streets = gpd.read_file(RAW / "centreline.gpkg").to_crs(UTM).geometry
+    streets = streets[~streets.is_empty]
+
+    extra = []
+    pi, wi = worship.sindex.query(parts.geometry, predicate="intersects")
+    mapped = set(wi)        # places of worship with parts in OpenStreetMap
+    for k in np.unique(pi):
+        part = parts.iloc[k]
+        top, foot, roof = metres(part.get("height")), metres(part.get("min_height")), metres(part.get("roof:height"))
+        if not top > 0 or part.geometry.area < 2:
+            continue
+        foot, roof = (0 if np.isnan(foot) else foot), (0 if np.isnan(roof) else min(roof, top))
+        if part.get("roof:shape") in POINTED and roof >= 3:
+            if top - roof > foot:
+                extra.append({"base": foot, "top": top - roof, "geometry": part.geometry})
+            extra += spire(part.geometry, max(foot, top - roof), top)
+        elif top - roof / 2 > foot:
+            extra.append({"base": foot, "top": top - roof / 2, "geometry": part.geometry})
+
+    spiky = b.church & (b.HEIGHT_SRC == "Lidar-Derived") & (b.MAX_HEIGHT > 15) & (b.MAX_HEIGHT > 1.5 * b.AVG_HEIGHT.clip(lower=1))
+    small = b.area < 150      # an outline this small is the tower itself
+    guessed = 0
+    for i in b.index[spiky]:
+        row = b.loc[i]
+        body = max(row.AVG_HEIGHT, row.base + 3)
+        b.loc[i, "top"] = body
+        if site[i] in mapped:
+            continue
+        if small[i]:
+            extra += spire(row.geometry, body, row.MAX_HEIGHT)
+            continue
+        others = site.index[(site == site[i]).values]
+        if (small[others] & (b.MAX_HEIGHT[others] >= 0.8 * row.MAX_HEIGHT)).any() or row.MAX_HEIGHT < body + 8:
+            continue
+        # a tower at the end of the long side that is nearer a street
+        box = shapely.get_coordinates(shapely.minimum_rotated_rectangle(row.geometry))[:4]
+        a, c = (box[0] + box[1]) / 2, (box[2] + box[3]) / 2
+        short = np.hypot(*(box[1] - box[0]))
+        if np.hypot(*(c - a)) < short:
+            a, c, short = (box[1] + box[2]) / 2, (box[3] + box[0]) / 2, np.hypot(*(box[2] - box[1]))
+        side = float(np.clip(0.35 * short, 4, 8))
+        ends = [e + (o - e) / np.hypot(*(o - e)) * (side / 2 + 0.5) for e, o in ((a, c), (c, a))]
+        near = [streets.distance(shapely.Point(e)).min() for e in ends]
+        tower = shapely.Point(ends[int(np.argmin(near))]).buffer(side / 2, cap_style="square")
+        shaft = max(body + 2, 0.55 * row.MAX_HEIGHT)
+        extra.append({"base": row.base, "top": shaft, "geometry": tower})
+        extra += spire(tower, shaft, row.MAX_HEIGHT)
+        guessed += 1
+
+    add = gpd.GeoDataFrame(extra, geometry="geometry", crs=UTM)
+    add["area"] = add.geometry.area
+    add = add[(add.area >= 2) & (add.top > 3)].reset_index(drop=True)
+    add["newer_source"], add["church"] = False, True
+    # each block belongs to the church outline it stands on most; one that stands on none goes
+    own = b[b.church]
+    ai, oi = own.sindex.query(add.geometry, predicate="intersects")
+    shared = pd.DataFrame({"add": ai, "of": own.index[oi],
+                           "area": shapely.area(shapely.intersection(add.geometry.values[ai], own.geometry.values[oi]))})
+    shared = shared.sort_values("area").drop_duplicates("add", keep="last")
+    add["part_of"] = pd.Series(shared.of.values, index=shared["add"].values)
+    add = add[add.part_of.notna()]
+    b["part_of"] = np.nan
+    log(f"churches: {int(b.church.sum())} outlines on {site.nunique()} places of worship, {int(spiky.sum())} lowered to their body, "
+        f"{len(mapped)} with parts from OpenStreetMap, {guessed} with a guessed tower, {len(add)} blocks added")
+    return pd.concat([b, add], ignore_index=True)
 
 
 def first_seen(b, old):
@@ -136,6 +261,9 @@ def group_parts(b):
         if ri != rj:
             parent[rj] = ri
     b["group"] = [find(i) for i in range(len(b))]
+    # the towers and spires added to a church are part of it
+    added = b.part_of.notna()
+    b.loc[added, "group"] = b.group[b.part_of[added].astype(int)].values
     log(f"  grouped into {b.group.nunique():,} buildings")
 
 
@@ -242,7 +370,8 @@ def assign_dated(b, points, old):
                         "year": pts.year.values[pi].astype(int), "tier": pts.tier.values[pi],
                         "name": pts.name.values[pi], "url": pts.url.values[pi],
                         "checked": pts.checked.values[pi] == True})  # noqa: E712 (NaN is not checked)
-    known = tall_and_old(main)
+    # and no church is too tall for its year: its height is its spire
+    known = tall_and_old(main) | set(b.group[b.church])
     hit = hit[~(too_tall_for_year(hit.year, hit.height) & ~hit.checked & ~hit.group.isin(known))
               & hit.year.between(FIRST_YEAR, LAST_YEAR)]
     log("  dated points matched to a building, by tier:",

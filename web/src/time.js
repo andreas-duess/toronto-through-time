@@ -9,12 +9,13 @@ const uniforms = `layout(std140) uniform epochUniforms {
   float year;
   float growYears;
   float tintYears;
+  vec3 sun;
 } epoch;
 `;
 const epochModule = {
   name: "epoch",
   vs: uniforms,
-  uniformTypes: { tint: "vec4<f32>", year: "f32", growYears: "f32", tintYears: "f32" },
+  uniformTypes: { tint: "vec4<f32>", year: "f32", growYears: "f32", tintYears: "f32", sun: "vec3<f32>" },
 };
 
 export class TimeExtension extends LayerExtension {
@@ -28,6 +29,8 @@ export class TimeExtension extends LayerExtension {
     // colour multiplier for a new object, back to 1 after tintYears
     tint: [1, 1, 1],
     tintYears: 1,
+    // where the sunlight travels (east, north, up), for the shadows (opts.shadows)
+    sunDirection: [0, 0, -1],
   };
 
   getShaders(extension) {
@@ -43,7 +46,7 @@ export class TimeExtension extends LayerExtension {
     if (extension.opts.mode === "rise") {
       // epochWall: how far along the wall (0 to 1), the wall's length, the height above the foot
       // of this piece and the height of the piece, in metres as drawn. A roof has length -1.
-      inject["vs:#decl"] += "out vec4 epochWall;\nout float epochFoot;\nout float epochCurtain;\n";
+      inject["vs:#decl"] += "out vec4 epochWall;\nout float epochFoot;\nout float epochCurtain;\nout float epochFacing;\n";
       inject["vs:#main-start"] += `
         float epochTall = elevations * max(epoch_grow, 0.02);
         epochFoot = vertexPositions.z;
@@ -59,13 +62,15 @@ export class TimeExtension extends LayerExtension {
       inject["fs:#decl"] = `in vec4 epochWall;
 in float epochFoot;
 in float epochCurtain;
+in float epochFacing;
 const float EPOCH_FLOOR = 3.4;   // metres from floor to floor
 // 1 between lo and hi, smoothed over the width of a pixel
 float epoch_band(float x, float lo, float hi, float px) {
   return smoothstep(lo - px, lo + px, x) * (1.0 - smoothstep(hi - px, hi + px, x));
 }
 `;
-      inject["fs:DECKGL_FILTER_COLOR"] = `
+      inject["fs:DECKGL_FILTER_COLOR"] = { order: -1, injection: `
+        ${extension.opts.shadows ? "shadow_facing = epochFacing;" : ""}
         if (epochWall.y >= 0.0) {
           float epochUp = epochFoot + epochWall.z;
           // darker towards the street, and a line under the roof
@@ -88,15 +93,19 @@ float epoch_band(float x, float lo, float hi, float px) {
           // glass is darker than the wall and, on a glass wall, a little blue
           color.rgb *= epochShade * mix(vec3(1.0), mix(vec3(0.8), vec3(0.66, 0.74, 0.82), epochCurtain), epochGlass);
         }
-      `;
-      inject["vs:DECKGL_FILTER_GL_POSITION"] = `
+      ` };
+      // Before deck.gl's own steps (order -1): the shadow step reads gl_Position after this one,
+      // and writes depths as colours that the wall drawing below must not touch.
+      inject["vs:DECKGL_FILTER_GL_POSITION"] = { order: -1, injection: `
         vec4 epochPos = geometry.position;
         float epochBase = project_size(geometry.worldPosition.z);
         epochPos.z = epochBase + (epochPos.z - epochBase) * max(epoch_grow, 0.02);
         position = project_common_position_to_clipspace(epochPos);
-      `;
+        gl_Position = position;
+      ` };
       inject["vs:DECKGL_FILTER_COLOR"] = `
         color.rgb *= mix(epoch.tint.rgb, vec3(1.0), max(epochYears.z, smoothstep(epoch.growYears, epoch.tintYears, epoch_age)));
+        epochFacing = -dot(geometry.normal, epoch.sun);
       `;
     } else {
       inject["vs:DECKGL_FILTER_COLOR"] = "color.a *= epoch_grow;\n";
@@ -111,9 +120,9 @@ float epoch_band(float x, float lo, float hi, float px) {
   }
 
   draw() {
-    const { currentYear, growYears, tint, tintYears } = this.props;
+    const { currentYear, growYears, tint, tintYears, sunDirection } = this.props;
     this.setShaderModuleProps({
-      epoch: { year: currentYear, growYears: Math.max(growYears, 0.001), tintYears, tint: [...tint, 1] },
+      epoch: { year: currentYear, growYears: Math.max(growYears, 0.001), tintYears, tint: [...tint, 1], sun: sunDirection },
     });
   }
 }

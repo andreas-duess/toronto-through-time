@@ -21,7 +21,7 @@ html, body {
 
 #map { position: absolute; inset: 0 0 64px 0; }
 
-#population, #story, #info, #legend, #shoreline-note {
+#population, #story, #info, #legend, #shoreline-note, #sun {
   position: absolute;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -58,6 +58,12 @@ html, body {
 
 #shoreline-note { top: 116px; right: 16px; padding: 5px 10px; font-size: 12px; color: var(--muted); }
 #shoreline-note::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 7px; vertical-align: -2px; border-radius: 2px; background: #b5cfe0; border: 1px solid #8fb0c6; }
+
+#sun { left: 50%; top: 16px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 5px 12px; font-size: 13px; }
+#sun[hidden] { display: none; }
+#sun-slider { width: 150px; margin: 0; accent-color: var(--accent); }
+#sun-time { min-width: 58px; font-variant-numeric: tabular-nums; }
+#sun-now { padding: 1px 8px; font: inherit; font-size: 12px; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 5px; cursor: pointer; }
 
 #info { right: 60px; bottom: 104px; width: 280px; padding: 12px 14px; font-size: 13px; }
 #info h3 { margin: 0 22px 6px 0; font-size: 15px; }
@@ -101,6 +107,6 @@ html, body {
   #story-text { font-size: 14px; }
   #quality, #sources-link { display: none; }
   #comments-link { white-space: nowrap; }
-  #speed { display: none; }
+  #speed, #sun { display: none !important; }
   #info { left: 16px; width: auto; }
 }
