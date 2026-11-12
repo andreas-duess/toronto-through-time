@@ -150,7 +150,7 @@ def load_address_points():
     xy = ap.geometry.str.extract(r"\[\[([-\d.]+), ([-\d.]+)\]")
     ap["lon"], ap["lat"] = xy[0].astype(float), xy[1].astype(float)
     ap["addr"] = ap.ADDRESS_FULL.map(norm_address)
-    return ap.drop(columns=["geometry", "ADDRESS_FULL"])
+    return ap.drop(columns=["geometry"]).rename(columns={"ADDRESS_FULL": "address"})
 
 
 def wikidata_points():
@@ -168,8 +168,15 @@ def heritage_points():
     h = h[h.CONSTRUCTI.notna() & ~h.BUILDING_T.isin(["Demolished", "Miscellaneous"])]
     # "1903-1910 (circa)" -> 1910: the year the building was finished
     years = h.CONSTRUCTI.str.findall(r"\b(1[6-9]\d\d|20[0-2]\d)\b").map(lambda y: int(y[-1]) if y else None)
+    # "Fort York Armouries, 1933, Marani, Lawson & Morris -adopted ..." -> "Fort York Armouries"
+    names = h.DESCRIPTIO.str.extract(r"^([A-Z][^,;\n]{2,60}?),\s*(?:c\.?\s*)?(?:1[6-9]\d\d|20[0-2]\d)")[0]
+    # not names: "House", "Semi-detached house", "Included on the City's Heritage Register on ..."
+    generic = names.fillna("").str.match(
+        r"(?i)^((semi-)?detached |row |pair of )?(houses?|apartments?|apartment building|stores?|shops?|"
+        r"residence|building|commercial building|warehouse|factory|garage)$|^(Part of|Included|Listed)\b")
+    names = names.where(~generic)
     return pd.DataFrame({"lon": h.geometry.x, "lat": h.geometry.y, "year": years,
-                         "name": None, "url": None, "tier": 1}).dropna(subset=["year"])
+                         "name": names, "url": None, "tier": 1}).dropna(subset=["year"])
 
 
 def apartment_points(ap):
@@ -362,6 +369,55 @@ def estimate_rest(b):
     b.loc[missing, "tier"] = ESTIMATE
 
 
+def apply_names(b, ap):
+    """Names for buildings that have none yet, from OpenStreetMap: a named building, or a named
+    hospital, school, church and the like whose grounds the building stands on. And for every
+    building the street address of an address point inside it."""
+    named = json.loads((RAW / "osm" / "named.json").read_text())["elements"]
+    named = [e for e in named if "building" in e["tags"] and "bounds" in e]
+    pts = gpd.GeoDataFrame(
+        {"osm_name": [e["tags"]["name"] for e in named]},
+        geometry=gpd.points_from_xy([(e["bounds"]["minlon"] + e["bounds"]["maxlon"]) / 2 for e in named],
+                                    [(e["bounds"]["minlat"] + e["bounds"]["maxlat"]) / 2 for e in named]), crs=4326).to_crs(UTM)
+    own = gpd.sjoin(pts, b[["geometry"]], predicate="within").groupby("index_right").osm_name.first()
+
+    areas = [e for e in json.loads((RAW / "osm" / "named_areas.json").read_text())["elements"]
+             if len(e.get("geometry", [])) >= 4 and e["geometry"][0] == e["geometry"][-1]]
+    grounds = gpd.GeoDataFrame(
+        {"osm_name": [e["tags"]["name"] for e in areas]},
+        geometry=[shapely.Polygon([(p["lon"], p["lat"]) for p in e["geometry"]]) for e in areas], crs=4326).to_crs(UTM)
+    cen = gpd.GeoDataFrame(geometry=b.geometry.centroid, crs=UTM)
+    on = gpd.sjoin(cen, grounds, predicate="within").groupby(level=0).osm_name.first()
+
+    before = b.name.notna().sum()
+    b["name"] = b.name.fillna(b.index.to_series().map(own)).fillna(b.index.to_series().map(on))
+    # every part of a named building carries the name
+    b["name"] = b.name.fillna(b.groupby("group").name.transform("first"))
+    log(f"  names: {before:,} from the registers, {b.name.notna().sum() - before:,} more from OpenStreetMap")
+
+    a = gpd.GeoDataFrame(ap[["address"]], geometry=gpd.points_from_xy(ap.lon, ap.lat), crs=4326).to_crs(UTM)
+    inside = gpd.sjoin(a, b[["geometry"]], predicate="within").groupby("index_right").address.first()
+    b["address"] = b.index.to_series().map(inside)
+    b["address"] = b.address.fillna(b.groupby("group").address.transform("first"))
+    log(f"  street address for {b.address.notna().sum():,} of {len(b):,}")
+
+
+def apply_plans(b):
+    """data/interim/plan_years.csv (pipeline/lost.py): buildings whose year is only an estimate
+    but which the fire insurance plans already show. The year becomes the one lost.py worked out
+    from the plans; it stays an estimate, now with an upper limit."""
+    path = ROOT / "data" / "interim" / "plan_years.csv"
+    if not path.exists():
+        return
+    p = pd.read_csv(path)
+    pts = gpd.GeoDataFrame(p, geometry=gpd.points_from_xy(p.lon, p.lat), crs=4326).to_crs(UTM)
+    hit = gpd.sjoin(pts, b[["geometry"]], predicate="within").groupby("index_right").year.min()
+    low = (b.top - b.base)[hit.index] <= 15  # a tower on old ground is not the building on the plan
+    hit = hit[(b.tier[hit.index] == ESTIMATE) & (b.year[hit.index] > hit) & low]
+    b.loc[hit.index, "year"] = hit
+    log(f"  on the fire insurance plans earlier than estimated: {len(hit):,} buildings")
+
+
 def apply_sites(b):
     """data/manual/sites.csv: a documented site whose buildings all share one year (Fort York).
     Overrides every other source for the buildings inside the outline."""
@@ -400,8 +456,10 @@ def write_buildings(b):
     for name, arr in files.items():
         (OUT / name).write_bytes(arr.tobytes())
     named = b[b.name.notna()]
-    names = {int(i): {"name": r["name"], "url": r.url} for i, r in named.iterrows()}
+    names = {int(i): {"name": r["name"], "url": r.url if isinstance(r.url, str) else None} for i, r in named.iterrows()}
     (OUT / "names.json").write_text(json.dumps(names))
+    # one line per building, in the same order
+    (OUT / "addresses.txt").write_text("\n".join(b.address.fillna("")))
     counts_by_tier = {TIERS[int(t)]: int(n) for t, n in b.tier.value_counts().sort_index().items()}
     meta = {"count": len(b), "vertices": len(coords), "origin": ORIGIN, "tiers": TIERS,
             "firstYear": FIRST_YEAR, "lastYear": LAST_YEAR, "countsByTier": counts_by_tier}
@@ -426,7 +484,9 @@ if __name__ == "__main__":
     assign_dated(b, points, old)
     assign_massing(b, old)
     estimate_rest(b)
+    apply_plans(b)
     apply_sites(b)
+    apply_names(b, ap)
     b["year"] = b.year.clip(FIRST_YEAR, LAST_YEAR).astype(int)
     b["tier"] = b.tier.astype(int)
     log(b.groupby("tier").year.describe()[["count", "min", "50%", "max"]].to_string())

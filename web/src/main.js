@@ -2,7 +2,9 @@ import maplibregl from "maplibre-gl";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { COORDINATE_SYSTEM } from "@deck.gl/core";
 import { SolidPolygonLayer } from "@deck.gl/layers";
+import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
 import { TimeExtension } from "./time.js";
+import { landmarkParts, FACTS } from "./landmarks.js";
 
 const $ = (id) => document.getElementById(id);
 const DATA = "./data/";
@@ -14,6 +16,7 @@ const OLD_COLOR = [214, 205, 190];
 const NEW_COLOR = [217, 84, 43];
 const NEW_TINT = NEW_COLOR.map((c, i) => c / OLD_COLOR[i]);
 const riseExtension = new TimeExtension({ mode: "rise" });
+const LOST_COLOR = [120, 94, 74];
 const TIER_COLORS = {
   landmark: [44, 123, 182],
   heritage: [0, 150, 136],
@@ -114,7 +117,9 @@ for (const type of ["mousedown", "wheel", "touchstart"]) {
 const overlay = new MapboxOverlay({ interleaved: true, layers: [], onClick: showBuilding });
 map.addControl(overlay);
 
-let meta, buildings, years, heights, tiers, names, water, population, stops, streets, streetLabels, places, area, rail, sites, forest, parks;
+let meta, buildings, years, heights, tiers, names, water, population, stops, streets, streetLabels, places, area, rail, sites, forest, parks, lost, addresses, landmarks;
+// buildings of the city's model that a hand-built landmark stands in for
+const replaced = new Set();
 
 async function load() {
   meta = await fetchJson("meta.json");
@@ -144,6 +149,11 @@ async function load() {
     startIndices: starts,
     attributes: { getPolygon: { value: positions, size: 3 } },
   };
+  lost = await loadLost();
+  landmarks = landmarkParts(await fetchJson("landmarks.json"));
+  const standIns = new Set(Object.values(FACTS).flatMap((f) => f.replaces));
+  for (const [i, n] of Object.entries(names)) if (standIns.has(n.name)) replaced.add(Number(i));
+  addresses = (await fetch(DATA + "addresses.txt").then((r) => r.text())).split("\n");
   for (const s of stops) {
     for (const k of ["year", "lon", "lat", "zoom", "bearing", "pitch", "orbit"]) s[k] = Number(s[k]);
     s.yearEnd = Number(s.year_end) > s.year ? Number(s.year_end) : s.year;
@@ -154,6 +164,66 @@ async function load() {
   render();
   if (map.isStyleLoaded()) addMapLayers(); else map.once("load", addMapLayers);
   $("loading").classList.add("done");
+}
+
+// Buildings that are gone, read off the fire insurance plans. Absent if lost.json is.
+async function loadLost() {
+  const info = await fetch(DATA + "lost.json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  if (!info) return null;
+  const [positions, starts, span, tall, about] = await Promise.all([
+    fetchArray("lost.positions.bin", Float32Array),
+    fetchArray("lost.starts.bin", Uint32Array),
+    fetchArray("lost.years.bin", Uint16Array),
+    fetchArray("lost.heights.bin", Float32Array),
+    fetchArray("lost.info.bin", Uint8Array),
+  ]);
+  return { ...info, span, tall, about,
+    data: { length: info.count, startIndices: starts, attributes: { getPolygon: { value: positions, size: 2 } } } };
+}
+
+function lostLayer() {
+  return new SolidPolygonLayer({
+    id: "lost",
+    beforeId: map.getLayer("places-city") ? "places-city" : undefined,
+    data: lost.data,
+    positionFormat: "XY",
+    coordinateSystem: COORDINATE_SYSTEM.LNGLAT_OFFSETS,
+    coordinateOrigin: meta.origin,
+    _normalize: false,
+    _windingOrder: "CCW",
+    extruded: true,
+    getElevation: (_, { index }) => lost.tall[index],
+    getFillColor: state.quality ? LOST_COLOR : OLD_COLOR,
+    updateTriggers: { getFillColor: state.quality },
+    material: { ambient: 0.55, diffuse: 0.6, shininess: 8 },
+    pickable: true,
+    autoHighlight: true,
+    highlightColor: [255, 255, 255, 90],
+    getYears: (_, { index, target }) => { for (let k = 0; k < 4; k++) target[k] = lost.span[index * 4 + k]; return target; },
+    currentYear: state.year,
+    growYears: RISE_YEARS,
+    tint: state.quality ? [1, 1, 1] : NEW_TINT,
+    tintYears: NEW_SPAN,
+    extensions: [riseExtension],
+  });
+}
+
+// Hand-built landmarks: each part rises while it is being built.
+function landmarkLayers() {
+  return landmarks.filter((p) => state.year >= p.from).map((p) => new SimpleMeshLayer({
+    id: `landmark-${p.id}`,
+    beforeId: map.getLayer("places-city") ? "places-city" : undefined,
+    data: [p],
+    mesh: p.mesh,
+    coordinateSystem: COORDINATE_SYSTEM.METER_OFFSETS,
+    coordinateOrigin: [...p.origin, 0],
+    getPosition: [0, 0, 0],
+    getColor: [255, 255, 255],
+    getScale: [1, 1, Math.max(0.02, Math.min(1, (state.year - p.from) / (p.to - p.from)))],
+    updateTriggers: { getScale: Math.min(state.year, p.to) },
+    material: { ambient: 0.6, diffuse: 0.6, shininess: 12 },
+    pickable: true,
+  }));
 }
 
 function buildingLayer() {
@@ -174,7 +244,11 @@ function buildingLayer() {
     pickable: true,
     autoHighlight: true,
     highlightColor: [255, 255, 255, 90],
-    getYear: (_, { index }) => years[index],
+    getYears: (_, { index, target }) => {
+      target[0] = replaced.has(index) ? 9999 : years[index];
+      target[1] = 9999; target[2] = 0; target[3] = 0;
+      return target;
+    },
     currentYear: state.year,
     growYears: RISE_YEARS,
     tint: state.quality ? [1, 1, 1] : NEW_TINT,
@@ -325,7 +399,7 @@ function render() {
   const y = Math.floor(state.year);
   const shore = updateWater(state.year);
   updateMap(state.year);
-  overlay.setProps({ layers: [buildingLayer()] });
+  overlay.setProps({ layers: [...(lost ? [lostLayer()] : []), buildingLayer(), ...landmarkLayers()] });
   writeHash();
 
   $("year-label").textContent = String(y);
@@ -393,7 +467,9 @@ function setupControls() {
   });
   $("legend").innerHTML = meta.tiers.map((t) =>
     `<div><span class="swatch" style="background:rgb(${TIER_COLORS[t].join(",")})"></span>${TIER_LABELS[t]}` +
-    `<span class="count">${(meta.countsByTier[t] ?? 0).toLocaleString("en-CA")}</span></div>`).join("");
+    `<span class="count">${(meta.countsByTier[t] ?? 0).toLocaleString("en-CA")}</span></div>`).join("") +
+    (lost ? `<div><span class="swatch" style="background:rgb(${LOST_COLOR.join(",")})"></span>Lost building, from fire insurance plans` +
+      `<span class="count">${lost.count.toLocaleString("en-CA")}</span></div>` : "");
 
   const span = meta.lastYear - meta.firstYear;
   stops.forEach((s, i) => {
@@ -533,11 +609,29 @@ function closeStory() {
 }
 
 function showBuilding(info) {
-  if (!info.picked || info.index < 0 || !info.layer?.id.startsWith("buildings")) {
+  if (info.picked && info.layer?.id.startsWith("landmark-")) {
+    const fact = FACTS[info.object.key];
+    return showInfo(fact.name, [...fact.rows, ["More", `<a href="${fact.url}" target="_blank" rel="noopener">article</a>`]]);
+  }
+  if (!info.picked || info.index < 0 || !["buildings", "lost"].includes(info.layer?.id)) {
     $("info").hidden = true;
     return;
   }
   const i = info.index;
+  if (info.layer.id === "lost") {
+    const [brick, plan, estimated] = lost.about.subarray(i * 3, i * 3 + 3);
+    const [built, gone, kept, stays] = lost.span.subarray(i * 4, i * 4 + 4);
+    // a piece that takes over from the plan before, or hands over to the next, has no date of its own
+    const known = lost.names?.[i];
+    return showInfo(known?.name ?? "Lost building", [
+      [kept ? "Standing by" : "Built about", built],
+      [stays ? "Still standing in" : "Gone about", gone],
+      ["Outline from", `the ${lost.plans[plan]} plan`],
+      ["Material", brick ? "brick" : "wood"],
+      ["Source", `Goad's fire insurance plans. Outline and material are from the plan; ${known ? "the years are from the article" : estimated ? "a year here is an estimate" : "the years lie between plan years"}; the height is assumed.`],
+      ...(known?.url ? [["More", `<a href="${escapeHtml(known.url)}" target="_blank" rel="noopener">article</a>`]] : []),
+    ]);
+  }
   const tier = meta.tiers[tiers[i]];
   const named = names[i];
   const rows = [
@@ -546,7 +640,10 @@ function showBuilding(info) {
     ["Height", `${Math.round(heights[i])} m`],
   ];
   if (named?.url) rows.push(["More", `<a href="${escapeHtml(named.url)}" target="_blank" rel="noopener">article</a>`]);
-  showInfo(named?.name ?? "Building", rows);
+  // the name if it has one, otherwise the street address
+  const address = addresses[i];
+  if (named?.name && address) rows.unshift(["Address", address]);
+  showInfo(named?.name ?? (address || "Building"), rows);
 }
 
 function showInfo(title, rows) {

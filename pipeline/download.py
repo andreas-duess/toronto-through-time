@@ -4,6 +4,7 @@ Files that already exist are skipped. Run: uv run pipeline/download.py
 """
 import json
 import pathlib
+import urllib.parse
 import urllib.request
 import zipfile
 
@@ -40,6 +41,38 @@ BY_NAME = {
 }
 
 
+# local file name -> Overpass query (OpenStreetMap), over all of Toronto
+BOX = "(43.58,-79.50,43.74,-79.27)"
+KINDS = ("hospital|school|university|college|place_of_worship|library|fire_station|police|theatre|"
+         "townhall|community_centre|arts_centre|courthouse|cinema")
+OVERPASS = {
+    # named buildings, and named institutions, with their bounding boxes
+    "osm/named.json": f'[out:json][timeout:150];(way[building][name]{BOX};relation[building][name]{BOX};'
+                      f'way[amenity~"^({KINDS})$"][name]{BOX};);out tags center bb;',
+    # the grounds of named institutions
+    "osm/named_areas.json": f'[out:json][timeout:150];(way[amenity~"^({KINDS})$"][name][!building]{BOX};);out tags geom;',
+    # outlines for the hand-built landmark models (pipeline/models.py)
+    "osm/landmarks.json": '[out:json][timeout:60];(nwr(43.6318,-79.4205,43.6346,-79.4165)'
+                          '[~"^(leisure|building|man_made|sport)$"~"."];nwr(43.6405,-79.3915,43.6435,-79.3860)'
+                          '[name~"CN Tower|Rogers Centre"];);out tags geom;',
+    # railway lines and the outline of Fort York
+    "osm/rail_fort.json": '[out:json][timeout:90];(way[railway~"^(rail|abandoned|disused|razed)$"]'
+                          f'{BOX};way(1416813033););out tags geom;',
+}
+
+
+def fetch_overpass(name, query):
+    dest = RAW / name
+    if dest.exists() and dest.stat().st_size > 0:
+        print(f"have  {name}")
+        return
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    data = urllib.parse.urlencode({"data": query}).encode()
+    req = urllib.request.Request("https://overpass-api.de/api/interpreter", data, {"User-Agent": "toronto-through-time"})
+    dest.write_bytes(urllib.request.urlopen(req, timeout=200).read())
+    print(f"done  {name}  {dest.stat().st_size / 1e6:.1f} MB")
+
+
 def resource_url(resource_id):
     with urllib.request.urlopen(f"{CKAN}/resource_show?id={resource_id}") as r:
         return json.load(r)["result"]["url"]
@@ -71,6 +104,8 @@ if __name__ == "__main__":
         fetch(name, resource_url(rid))
     for name, (package, part) in BY_NAME.items():
         fetch(name, package_resource_url(package, part))
+    for name, query in OVERPASS.items():
+        fetch_overpass(name, query)
     for archive in RAW.glob("*.zip"):
         if not (RAW / archive.stem).exists():
             with zipfile.ZipFile(archive) as z:

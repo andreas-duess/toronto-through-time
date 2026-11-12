@@ -1,7 +1,7 @@
 import { LayerExtension } from "@deck.gl/core";
 
-// Shows each object from its year on. Buildings ("rise") grow out of the ground and carry a tint
-// while they are new; flat things ("fade") fade in.
+// Shows each object from its first year to its last. Buildings ("rise") grow out of the ground,
+// carry a tint while they are new and sink in their last year; flat things ("fade") fade in.
 const uniforms = `layout(std140) uniform epochUniforms {
   vec4 tint;
   float year;
@@ -18,7 +18,9 @@ const epochModule = {
 export class TimeExtension extends LayerExtension {
   static extensionName = "TimeExtension";
   static defaultProps = {
-    getYear: { type: "accessor", value: 0 },
+    // [first year, last year, 1 to appear at once, 1 to vanish at once]: the last two are for an
+    // object that takes over from another one or hands over to one
+    getYears: { type: "accessor", value: [0, 9999, 0, 0] },
     currentYear: 2026,
     growYears: 1.5,
     // colour multiplier for a new object, back to 1 after tintYears
@@ -28,12 +30,13 @@ export class TimeExtension extends LayerExtension {
 
   getShaders(extension) {
     const inject = {
-      "vs:#decl": "in float epochYears;\nfloat epoch_age;\nfloat epoch_grow;\n",
+      "vs:#decl": "in vec4 epochYears;\nfloat epoch_age;\nfloat epoch_grow;\n",
       "vs:#main-start": `
-        epoch_age = epoch.year - epochYears;
-        epoch_grow = smoothstep(0.0, epoch.growYears, epoch_age);
+        epoch_age = epoch.year - epochYears.x;
+        epoch_grow = max(epochYears.z, smoothstep(0.0, epoch.growYears, epoch_age))
+          * max(epochYears.w, smoothstep(0.0, 0.7, epochYears.y - epoch.year));
       `,
-      "vs:#main-end": "if (epoch_age < 0.0) gl_Position = vec4(0.0);\n",
+      "vs:#main-end": "if (epoch_age < 0.0 || epoch.year >= epochYears.y) gl_Position = vec4(0.0);\n",
     };
     if (extension.opts.mode === "rise") {
       inject["vs:DECKGL_FILTER_GL_POSITION"] = `
@@ -43,7 +46,7 @@ export class TimeExtension extends LayerExtension {
         position = project_common_position_to_clipspace(epochPos);
       `;
       inject["vs:DECKGL_FILTER_COLOR"] = `
-        color.rgb *= mix(epoch.tint.rgb, vec3(1.0), smoothstep(epoch.growYears, epoch.tintYears, epoch_age));
+        color.rgb *= mix(epoch.tint.rgb, vec3(1.0), max(epochYears.z, smoothstep(epoch.growYears, epoch.tintYears, epoch_age)));
       `;
     } else {
       inject["vs:DECKGL_FILTER_COLOR"] = "color.a *= epoch_grow;\n";
@@ -53,7 +56,7 @@ export class TimeExtension extends LayerExtension {
 
   initializeState() {
     this.getAttributeManager()?.add({
-      epochYears: { size: 1, type: "float32", stepMode: "dynamic", accessor: "getYear" },
+      epochYears: { size: 4, type: "float32", stepMode: "dynamic", accessor: "getYears" },
     });
   }
 

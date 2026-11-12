@@ -26,6 +26,10 @@ uv run pipeline/build.py       # writes web/public/data/
 uv run pipeline/water.py       # historic water; downloads its own sources
 uv run --with pillow --with scipy pipeline/woods.py   # woods on the 1851 map, into data/interim/
 uv run pipeline/streets.py     # dated streets, railways, forest, parks, names; needs the steps above
+uv run --with pillow --with scipy --with rasterio pipeline/plans.py   # outlines off the fire insurance plans
+uv run --with pillow --with scipy --with rasterio pipeline/plans.py --area island    # and --area trinity
+uv run --with pillow --with scipy --with rasterio pipeline/island.py   # Island outline 1913, 1924; then water.py again
+uv run --with rasterio pipeline/lost.py    # lost buildings; then run build.py, streets.py and this once more
 ```
 
 ## How a building gets its year
@@ -38,9 +42,22 @@ snapshot the building appears in (2018 on), and for the remaining 86% an
 estimate from 2021 census construction periods and the dates of nearby
 buildings. `web/public/sources.html` has the full list with licences.
 
+## Hand-built landmarks
+
+`web/src/landmarks.js` builds the CN Tower, the Rogers Centre and BMO Field from simple shapes;
+`pipeline/models.py` supplies their outlines from OpenStreetMap. The comment above each model says
+which numbers are sourced and which are judged from photographs. To add one: a function that
+returns a mesh, an entry in `landmarkParts` with its construction years, and an entry in `FACTS`.
+
 ## Known limits
 
-- Only buildings standing today are shown; nothing demolished.
+- Lost buildings are shown only between Bathurst Street and the Don, the lake and Bloor Street,
+  and only from Goad's fire insurance plans of 1880, 1889, 1903, 1913 and 1924
+  (`pipeline/plans.py`, `pipeline/lost.py`; what is read and what is estimated is listed at the
+  top of each). Outlines and brick or wood are from the plans; years fall between plan years or
+  are estimates; heights are assumed (wood 6.5 m, brick 10 m). Row houses often come out as one
+  block. Nothing demolished is shown elsewhere, and nothing that went up and came down between
+  1924 and today.
 - Estimated years are good to about a decade.
 - Towers built 2001 to 2017 often have no usable permit and are estimated.
 - There is no modern base map. Streets come from the city's centreline file, which has no dates:
@@ -72,4 +89,5 @@ blank year record what could not be sourced), `town_extents.csv` (documented tow
 by bounding streets), `map_extents.csv` (outlines of the built-up town traced by eye from the
 georeferenced maps of 1834 and 1842), `rail_years.csv` (opening year of each railway line),
 `sites.csv` (a site whose buildings share one documented year, with its outline: Fort York).
-`places_README.md` lists what is estimated or unsourced.
+`lost_zones.csv` (places where written sources date the lost buildings: parts of the Island, the
+old Trinity College), `island.csv` (the research behind the Island rows). `places_README.md` lists what is estimated or unsourced.

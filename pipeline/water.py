@@ -7,6 +7,7 @@ Sources (University of Toronto Map & Data Library, digitised from georeferenced 
   - Historical Hydrography of Toronto: 1834, 1851 (whole harbour), 1857, 1872, 1878 (downtown shore only)
   - Don Valley Historical Mapping Project: 1891, 1894, 1909, 1918, 1931 (harbour and Ashbridge's Bay;
     the Island is not drawn in these)
+  - Goad's fire insurance plans of 1913 and 1924, for the Island (pipeline/island.py; run it first)
 
 Run: uv run pipeline/water.py
 """
@@ -45,7 +46,7 @@ PARTIAL = {1857, 1872, 1878}
 
 # Hand-drawn helper shapes, lon/lat. None of them is a historic outline.
 # The Island and the west end of the peninsula. The Don Valley layers draw no Island, so inside this
-# shape the 1891 to 1909 frames keep the 1851 outline, and later frames leave today's map showing.
+# shape the 1891 to 1909 frames keep the 1851 outline; from 1913 the Island is read off Goad's plans.
 ISLAND_ZONE = [(-79.418, 43.596), (-79.418, 43.627), (-79.400, 43.6335), (-79.343, 43.6335), (-79.343, 43.596)]
 # The storm of 1858 cut the peninsula here and made it an island. Position is approximate.
 EASTERN_GAP = [(-79.3500, 43.6285), (-79.3440, 43.6285), (-79.3440, 43.6335), (-79.3500, 43.6335)]
@@ -63,9 +64,17 @@ OPEN_LAKE = [(-79.60, 43.50), (-79.60, 43.585), (-79.43, 43.603), (-79.39, 43.60
 MODERN_FADE = [1950, 1960]
 # The 1834 marsh at Ashbridge's Bay stays until the 1891 map takes over, which draws the bay as water.
 MARSH_FADE = [1883, 1891]
-# Inside the Island zone, land that the old maps show is painted over today's water until the frames
-# stop carrying the old Island outline (the 1918 map).
-ISLAND_LAND_FADE = [1910, 1918]
+# Inside the Island zone, land that the old maps show is painted over today's water until today's
+# shore takes over.
+ISLAND_LAND_FADE = MODERN_FADE
+
+ISLAND = ROOT / "data" / "interim" / "island"
+ISLAND_YEARS = (1913, 1924)
+# frames that are not one map: name shown by the web map
+COMBINED = {GAP_YEAR: f"{LAYERS[1857][3]}, with the {GAP_YEAR} breach added by hand",
+            1913: "1909 topographic map, Island from Goad's plan of 1913",
+            1924: "1918 topographic map, Island from Goad's plan of 1924"}
+ISLAND_FROM = {1918: "Goad's plan of 1913", 1931: "Goad's plan of 1924"}
 
 SIMPLIFY_M = 1.5
 
@@ -125,9 +134,18 @@ def frames():
             out[GAP_YEAR] = prev
     island_1858 = out[GAP_YEAR].intersection(zone)
     west = to_utm([(ISLAND_EAST, 43.5), (ISLAND_EAST, 43.7), (-79.6, 43.7), (-79.6, 43.5)])
-    for year in (1891, 1894, 1909, 1918, 1931):
-        f = area_of(read(year))
-        out[year] = f.difference(zone).union(island_1858) if year <= 1909 else f.difference(zone.intersection(west))
+    # The Island from 1913 on: its land as read off Goad's plans (pipeline/island.py). The frames
+    # of 1913 and 1924 are the harbour of the map before with the Island of that year.
+    island = {y: gpd.read_file(ISLAND / f"{y}.geojson").geometry.iloc[0] for y in ISLAND_YEARS
+              if (ISLAND / f"{y}.geojson").exists()}
+    zone_west = zone.intersection(west)
+    for year, harbour in ((1891, 1891), (1894, 1894), (1909, 1909), (1913, 1909), (1918, 1918), (1924, 1918), (1931, 1931)):
+        f = area_of(read(harbour))
+        drawn = max((y for y in island if y <= year), default=None)
+        if drawn is None:
+            out[year] = f.difference(zone).union(island_1858) if year <= 1909 else f.difference(zone_west)
+        else:
+            out[year] = f.difference(zone_west).union(zone_west.difference(island[drawn]))
     # the half-metre in and out removes slivers left along the helper shapes
     out = {y: polygons_only(f.union(lake).buffer(-0.5).buffer(0.5)) for y, f in sorted(out.items())}
     # Where the old maps show land that is water today (the peninsula and the bar along the marsh),
@@ -156,7 +174,7 @@ if __name__ == "__main__":
         # lost and gained overlap the common part by a metre so no seam shows between them
         steps.append({
             "year": year,
-            "source": LAYERS[year][3] if year in LAYERS else f"{LAYERS[1857][3]}, with the {GAP_YEAR} breach added by hand",
+            "source": COMBINED.get(year) or LAYERS[year][3] + (f", Island from {ISLAND_FROM[year]}" if year in ISLAND_FROM else ""),
             "common": to_lonlat(cur.intersection(nxt)),
             "lost": to_lonlat(cur.difference(nxt).buffer(-0.5).buffer(1.5)),
             "gained": to_lonlat(nxt.difference(cur).buffer(-0.5).buffer(1.5)),

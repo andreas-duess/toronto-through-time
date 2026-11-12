@@ -16,11 +16,11 @@
  "firstYear": 1793,
  "lastYear": 2026,
  "countsByTier": {
-  "landmark": 1133,
+  "landmark": 1134,
   "heritage": 4351,
   "apartment": 2273,
   "permit": 5769,
   "massing": 1594,
-  "estimate": 90349
+  "estimate": 90348
  }
 }
