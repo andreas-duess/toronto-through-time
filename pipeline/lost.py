@@ -382,6 +382,18 @@ if __name__ == "__main__":
     overall = np.median(lost.gone.values[known])
     lost.loc[unknown, "gone"] = [np.median(lost.gone.values[known[a]]) if len(a) >= 3 else overall for a in around]
     lost["built"] = np.round(lost.built)
+    # nothing stands before its ground is land in the water maps; what was gone by then is dropped
+    frames = water.frames()[0]
+    cen = lost.geometry.centroid.values
+    first = lost.built.values.copy()
+    steps = sorted(frames)
+    for year, nxt in zip(steps, steps[1:] + [water.MODERN_FADE[1]]):
+        wet = shapely.contains(frames[year].buffer(-5), cen)
+        lost.loc[wet, "built"] = np.maximum(lost.built.values[wet], nxt)
+    held = lost.built.values > first
+    log(f"  held back until the ground was dry land: {held.sum():,}, of which gone by then and dropped:"
+        f" {(held & (lost.built.values >= np.round(lost.gone.values))).sum():,}")
+    lost = lost[~(held & (lost.built.values >= np.round(lost.gone.values)))].reset_index(drop=True)
     lost["gone"] = np.maximum(np.round(lost.gone), lost.built + 1)
     n = len(lost)
     log(f"lost outlines: {n:,}; end estimated from neighbours {unknown.sum():,}")

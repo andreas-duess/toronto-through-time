@@ -8,7 +8,7 @@ Sources (University of Toronto Map & Data Library, digitised from georeferenced 
   - Don Valley Historical Mapping Project: 1891, 1894, 1909, 1918, 1931 (harbour and Ashbridge's Bay;
     the Island is not drawn in these)
   - Goad's fire insurance plans of 1913 and 1924, for the Island (pipeline/island.py; run it first)
-  - today's buildings on the Island (pipeline/build.py; run it first): each stands on land from its year
+  - today's buildings (pipeline/build.py; run it first): each stands on land by its year
 
 Run: uv run pipeline/water.py
 """
@@ -63,12 +63,14 @@ ISLAND_EAST = -79.351
 OPEN_LAKE = [(-79.60, 43.50), (-79.60, 43.585), (-79.43, 43.603), (-79.39, 43.6055), (-79.36, 43.611),
              (-79.34, 43.620), (-79.30, 43.638), (-79.24, 43.655), (-79.24, 43.50)]
 # The last mapped shore (1931) gives way to today's between these years.
-MODERN_FADE = [1950, 1960]
+MODERN_FADE = [1954, 1956]
 # The 1834 marsh at Ashbridge's Bay stays until the 1891 map takes over, which draws the bay as water.
 MARSH_FADE = [1883, 1891]
-# Inside the Island zone, land that the old maps show is painted over today's water until today's
-# shore takes over.
-ISLAND_LAND_FADE = MODERN_FADE
+# The harbour, the Port Lands and the lower Don, where every mapped year draws the water. Inside
+# this shape, the Island zone and the bar, the web map hides today's water (the ship channel, the
+# straightened Don, the slips) and shows only the water of the year, until today's shore takes over.
+HARBOUR = [(-79.405, 43.6335), (-79.405, 43.648), (-79.368, 43.655), (-79.368, 43.672), (-79.348, 43.672),
+           (-79.348, 43.662), (-79.31, 43.668), (-79.31, 43.60), (-79.343, 43.60), (-79.343, 43.6335)]
 
 ISLAND = ROOT / "data" / "interim" / "island"
 ISLAND_YEARS = (1913, 1924)
@@ -117,7 +119,7 @@ def polygons_only(geom):
 def standing(zone):
     """Today's buildings inside the zone with a little ground around each, and their years (from
     pipeline/build.py, if it has run). A building that stands in a year stands on land, also
-    where the plan's outline misses it or lies a few metres off."""
+    where the old map's outline misses it or lies a few metres off."""
     try:
         origin = json.loads((OUT / "meta.json").read_text())["origin"]
         pos = np.fromfile(OUT / "positions.bin", "<f4").reshape(-1, 3)[:, :2].astype(float) + origin
@@ -126,13 +128,18 @@ def standing(zone):
     except FileNotFoundError:
         return np.array([], object), np.array([], int)
     first = gpd.GeoSeries(gpd.points_from_xy(*pos[starts[:-1]].T), crs=4326).to_crs(UTM)
-    inside = np.flatnonzero(first.within(zone).values)
+    shapely.prepare(zone)
+    inside = np.flatnonzero(shapely.contains(zone, first.values))
     outlines = [Polygon(pos[starts[i]:starts[i + 1]]) for i in inside]
     ground = gpd.GeoSeries(outlines, crs=4326).to_crs(UTM).buffer(0).buffer(GROUND_M)
     return ground.values, years[inside]
 
 
-def frames():
+def frames(pads=True):
+    """The water of each mapped year (UTM), the 1834 marsh, and the area in which the web map
+    hides today's water. With pads, today's buildings stand on land from the frame before their
+    year (build.py asks for the frames without, to hold estimated years back until the land is
+    there)."""
     zone, gap, lake = to_utm(ISLAND_ZONE), to_utm(EASTERN_GAP), to_utm(OPEN_LAKE)
     out = {}
     g = read(1834)
@@ -160,15 +167,18 @@ def frames():
     island = {y: gpd.read_file(ISLAND / f"{y}.geojson").geometry.iloc[0] for y in ISLAND_YEARS
               if (ISLAND / f"{y}.geojson").exists()}
     zone_west = zone.intersection(west)
-    built, built_year = standing(zone_west)
     for year, harbour in ((1891, 1891), (1894, 1894), (1909, 1909), (1913, 1909), (1918, 1918), (1924, 1918), (1931, 1931)):
         f = area_of(read(harbour))
         drawn = max((y for y in island if y <= year), default=None)
         if drawn is None:
             out[year] = f.difference(zone).union(island_1858) if year <= 1909 else f.difference(zone_west)
         else:
-            land = shapely.union_all([island[drawn], *built[built_year <= year]])
-            out[year] = f.difference(zone_west).union(zone_west.difference(land))
+            out[year] = f.difference(zone_west).union(zone_west.difference(island[drawn]))
+    if pads:
+        built, built_year = standing(shapely.union_all(list(out.values())))
+        steps = sorted(out)
+        for year, nxt in zip(steps, steps[1:] + [MODERN_FADE[1]]):
+            out[year] = out[year].difference(shapely.union_all(built[built_year < nxt]))
     # the half-metre in and out removes slivers left along the helper shapes
     out = {y: polygons_only(f.union(lake).buffer(-0.5).buffer(0.5)) for y, f in sorted(out.items())}
     # Where the old maps show land that is water today (the peninsula and the bar along the marsh),
@@ -177,7 +187,7 @@ def frames():
     closed = marsh.buffer(300).buffer(-300)
     lake_side = marsh.buffer(350).intersection(translate(marsh.convex_hull, 250, -450))
     bar = shapely.union_all([to_utm(NECK), closed, lake_side])
-    return out, polygons_only(marsh), zone, polygons_only(bar.difference(zone))
+    return out, polygons_only(marsh), polygons_only(shapely.union_all([zone, bar, to_utm(HARBOUR)]))
 
 
 def to_lonlat(geom):
@@ -188,7 +198,7 @@ def to_lonlat(geom):
 
 
 if __name__ == "__main__":
-    water, marsh, zone, bar = frames()
+    water, marsh, land = frames()
     years = list(water)
     steps = []
     for i, year in enumerate(years):
@@ -205,6 +215,6 @@ if __name__ == "__main__":
         log(year, f"water {cur.area / 1e6:.1f} km2, lost to next {cur.difference(nxt).area / 1e4:.0f} ha,"
                   f" gained {nxt.difference(cur).area / 1e4:.0f} ha")
     data = {"steps": steps, "modernFade": MODERN_FADE, "marsh": to_lonlat(marsh), "marshFade": MARSH_FADE,
-            "islandLand": to_lonlat(zone), "islandLandFade": ISLAND_LAND_FADE, "barLand": to_lonlat(bar)}
+            "land": to_lonlat(land)}
     (OUT / "water.json").write_text(json.dumps(data, separators=(",", ":")))
     log("wrote water.json", f"{(OUT / 'water.json').stat().st_size / 1e3:.0f} kB")

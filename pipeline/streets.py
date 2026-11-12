@@ -385,7 +385,8 @@ def write_forest(old, s, xy, years, rail):
       - everywhere and always: a place is cleared when the first street, building or named site
         comes within CLEAR_M of it (60 m for a railway). After 1851 this is the only way the woods
         on the map go, so woods far from any street stay to the present."""
-    frames, marsh, zone, _ = water.frames()
+    frames, marsh, _ = water.frames()
+    zone = water.to_utm(water.ISLAND_ZONE)
     land = old.difference(shapely.union_all([frames[min(frames)], frames[WOODS_YEAR], marsh, zone]))
     land = land.buffer(-30).buffer(30)  # drops the wharves
     woods = shapely.union_all(gpd.read_file(ROOT / "data" / "interim" / "woods_1851.geojson").geometry.values)

@@ -256,7 +256,7 @@ function buildingLayer() {
 }
 
 // Each mapped shore blends into the next over the years before the next map, this many at most.
-const SHORE_BLEND = 8;
+const SHORE_BLEND = 2;
 const EMPTY = { type: "Polygon", coordinates: [] };
 let waterStep = -1;
 
@@ -285,11 +285,10 @@ function addMapLayers() {
   map.addLayer({ id: "parks", type: "fill", source: "parks", paint: { "fill-color": PARK_COLOR } }, "water");
   map.addSource("forest", { type: "geojson", data: forest });
   map.addLayer({ id: "forest", type: "fill", source: "forest", paint: { "fill-color": FOREST_COLOR } }, "water");
-  // land the old maps show where there is water today; the water of the year is painted on top
-  for (const part of ["islandLand", "barLand"]) {
-    map.addSource(part, { type: "geojson", data: water[part] });
-    map.addLayer({ id: part, type: "fill", source: part, paint: { "fill-color": LAND_COLOR } });
-  }
+  // Hides today's water in the harbour, the lower Don and around the Island, so that only the
+  // water of the year shows there; it is painted on top.
+  map.addSource("old-land", { type: "geojson", data: water.land });
+  map.addLayer({ id: "old-land", type: "fill", source: "old-land", paint: { "fill-color": LAND_COLOR } });
   map.addSource("marsh", { type: "geojson", data: water.marsh });
   map.addLayer({ id: "marsh", type: "fill", source: "marsh", paint: { "fill-color": MARSH_COLOR } });
   for (const part of ["common", "lost", "gained"]) {
@@ -387,8 +386,7 @@ function updateWater(year) {
   map.setPaintProperty("water-lost", "fill-opacity", 1 - k);
   map.setPaintProperty("water-gained", "fill-opacity", k);
   map.setPaintProperty("marsh", "fill-opacity", 1 - fade(year, water.marshFade));
-  map.setPaintProperty("islandLand", "fill-opacity", 1 - fade(year, water.islandLandFade));
-  map.setPaintProperty("barLand", "fill-opacity", 1 - fade(year, water.modernFade));
+  map.setPaintProperty("old-land", "fill-opacity", 1 - fade(year, water.modernFade));
   if (!next) return k < 1 ? cur.source : null;
   return k > 0.5 ? next.source : cur.source;
 }

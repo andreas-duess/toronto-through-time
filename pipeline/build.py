@@ -25,6 +25,8 @@ import numpy as np
 import openpyxl
 import pandas as pd
 import shapely
+
+import water
 from scipy.spatial import cKDTree
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -216,8 +218,18 @@ def permit_points(ap):
 
 
 def too_tall_for_year(year, height):
-    """A 19th-century date on a tower means a kept facade or a mismatch."""
-    return ((year < 1905) & (height > 45)) | ((year < 1925) & (height > 95))
+    """An old date on a tower means a kept facade or a mismatch: the date belongs to an old
+    building on the site, the height to the tower that replaced it. Before 1950 the city had only
+    a handful of buildings over 60 m, and those are listed by hand (data/manual/tall_old.csv)."""
+    return ((year < 1905) & (height > 45)) | ((year < 1950) & (height > 60)) | ((year < 1967) & (height > 110))
+
+
+def tall_and_old(main):
+    """Groups of the buildings in data/manual/tall_old.csv, whose old dates are right."""
+    t = pd.read_csv(MANUAL / "tall_old.csv")
+    pts = gpd.GeoSeries(gpd.points_from_xy(t.lon, t.lat), crs=4326).to_crs(UTM)
+    _, bi = main.sindex.nearest(pts, max_distance=20, return_all=False)
+    return set(main.group.values[bi])
 
 
 def assign_dated(b, points, old):
@@ -226,11 +238,12 @@ def assign_dated(b, points, old):
     main = b[b.area >= 30]
     pi, bi = main.sindex.nearest(pts.geometry, max_distance=20, return_all=False)
     hit = pd.DataFrame({"poly": main.index.values[bi], "group": main.group.values[bi],
-                        "height": main.top.values[bi],
+                        "height": (main.top - main.base).values[bi],
                         "year": pts.year.values[pi].astype(int), "tier": pts.tier.values[pi],
                         "name": pts.name.values[pi], "url": pts.url.values[pi],
                         "checked": pts.checked.values[pi] == True})  # noqa: E712 (NaN is not checked)
-    hit = hit[~(too_tall_for_year(hit.year, hit.height) & ~hit.checked)
+    known = tall_and_old(main)
+    hit = hit[~(too_tall_for_year(hit.year, hit.height) & ~hit.checked & ~hit.group.isin(known))
               & hit.year.between(FIRST_YEAR, LAST_YEAR)]
     log("  dated points matched to a building, by tier:",
         {TIERS[t]: n for t, n in hit.tier.value_counts().sort_index().items()})
@@ -241,7 +254,7 @@ def assign_dated(b, points, old):
     own = hit.drop_duplicates("poly").set_index("poly")
     shared = hit.drop_duplicates("group").set_index("group")
     # A tower standing on a dated old base (a kept facade) is its own building.
-    split = ~b.index.isin(own.index) & too_tall_for_year(b.group.map(shared.year), b.top)
+    split = ~b.index.isin(own.index) & too_tall_for_year(b.group.map(shared.year), b.top - b.base) & ~b.group.isin(known)
     b.loc[split, "group"] = b.group.max() + 1 + np.arange(split.sum())
     for col in ["year", "tier", "name", "url"]:
         b[col] = b.index.map(own[col]).where(b.index.isin(own.index), b.group.map(shared[col]))
@@ -418,6 +431,22 @@ def apply_plans(b):
     log(f"  on the fire insurance plans earlier than estimated: {len(hit):,} buildings")
 
 
+def hold_until_dry(b):
+    """An estimated year cannot be earlier than the land: where the old maps show water under a
+    building, its year is held back to the first map that shows land (pipeline/water.py). Not on
+    the Island, whose outline off the plans is too rough for this."""
+    frames = water.frames(pads=False)[0]
+    cen = b.geometry.centroid.values
+    since = np.full(len(b), float(FIRST_YEAR))
+    steps = sorted(frames)
+    for year, nxt in zip(steps, steps[1:] + [water.MODERN_FADE[1]]):
+        shapely.prepare(frames[year])
+        since[shapely.contains(frames[year], cen)] = nxt
+    late = (b.tier == ESTIMATE).values & (b.year.values < since) & ~shapely.contains(water.to_utm(water.ISLAND_ZONE), cen)
+    b.loc[late, "year"] = since[late]
+    log(f"  estimated years held back until the ground was dry land: {late.sum():,}")
+
+
 def apply_sites(b):
     """data/manual/sites.csv: a documented site whose buildings all share one year (Fort York).
     Overrides every other source for the buildings inside the outline."""
@@ -485,6 +514,7 @@ if __name__ == "__main__":
     assign_massing(b, old)
     estimate_rest(b)
     apply_plans(b)
+    hold_until_dry(b)
     apply_sites(b)
     apply_names(b, ap)
     b["year"] = b.year.clip(FIRST_YEAR, LAST_YEAR).astype(int)
