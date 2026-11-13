@@ -27,7 +27,7 @@ SOUNDS = {
     "fire": "A large city fire at night: timber crackling and roaring flames, distant men shouting, a fire bell ringing far away, no music",
     "train": "Close recording of an old steam locomotive pulling a train at walking pace: slow heavy rhythmic chuff, chuff, chuff, chuff of the engine and iron wheels clanking over rail joints. No whistle, no horn, no siren, no bell, no hiss, no music",
     "fair": "A busy outdoor country fair in the 1870s: a happy crowd milling about, hand bells ringing, a barker calling out, farm animals in the distance, no music, no modern sounds",
-    "boo": "A room of about thirty men in a council chamber in the 1890s booing, jeering and grumbling angrily, a gavel banging, no music, no modern sounds",
+    "boo": "A crowd of men loudly booing in unison: long drawn-out boooo, boooo, disapproving jeers, thumbs down, in a large hall. Only booing, no cheering, no applause, no laughter, no music",
     "building": "A busy building site in a forest clearing in the 1790s with many men at work: men shouting orders and calling to each other throughout, a two-man saw cutting a log, an axe chopping, a tree falling, timber being dragged and dropped, only an occasional hammer. No machines, no music, no modern sounds",
     "bell": "A single church bell tolling slowly for a funeral, one deep toll every three seconds, outdoors, quiet, no other sounds, no music",
     "toast": "A room full of people in a tavern in the 1860s cheering together and clinking glasses, a hearty cheer, laughter, no music, no modern sounds",
