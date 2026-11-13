@@ -66,10 +66,24 @@ const fetchJson = (name) => fetch(DATA + name).then((r) => r.json());
 const state = { year: 1793, playing: false, speed: 6, quality: false };
 // index: the stop on the card (-1 when closed); run: bumped to cancel a stop's animation
 // voice: whether the story is read aloud; narration: the sound of the stop being read, if any
-const story = { index: -1, playing: false, run: 0, voice: true, narration: null, files: [] };
+const story = { index: -1, playing: false, run: 0, voice: true, narration: null, files: [], sound: null };
+// A few stops have a sound under the voice (a battle, a fire, hooves): quiet, in a loop, fading in and out.
+const SOUND_LEVEL = 0.16;
+function fadeSound(sound, to, ms, then) {
+  const from = sound.volume, start = performance.now();
+  const step = (now) => {
+    const k = Math.min(1, (now - start) / ms);
+    sound.volume = from + (to - from) * k;
+    if (k < 1) requestAnimationFrame(step); else then?.();
+  };
+  requestAnimationFrame(step);
+}
 function hush() {
   story.narration?.pause();
   story.narration = null;
+  const sound = story.sound;
+  story.sound = null;
+  if (sound) fadeSound(sound, 0, 600, () => sound.pause());
 }
 // Reads a stop aloud. Without sound (switched off, or the browser refuses) the story keeps its own time.
 function narrate(i) {
@@ -78,6 +92,15 @@ function narrate(i) {
   const sound = new Audio(`./audio/${story.files[i]}`);
   story.narration = sound;
   sound.play().catch(() => { if (story.narration === sound) story.narration = null; });
+  if (stops[i].sound) {
+    const under = new Audio(`./audio/fx-${stops[i].sound}.mp3`);
+    under.loop = true;
+    under.volume = 0;
+    story.sound = under;
+    under.play().then(() => fadeSound(under, SOUND_LEVEL, 1500)).catch(() => { if (story.sound === under) story.sound = null; });
+    // it fades out as the voice ends
+    sound.addEventListener("ended", () => { if (story.sound === under) { story.sound = null; fadeSound(under, 0, 1800, () => under.pause()); } });
+  }
 }
 const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 // time to read a story card
@@ -903,11 +926,6 @@ function render() {
   $("year-label").textContent = String(y);
   $("population-value").textContent = populationAt(state.year);
   $("standing").textContent = `${countStanding(y).toLocaleString("en-CA")} of today's buildings are built`;
-  const note = $("shoreline-note");
-  note.hidden = !shore && model;
-  note.classList.toggle("photo", !model);
-  if (!model) note.textContent = `Aerial photograph of ${aerial.shown}, City of Toronto`;
-  else if (shore) note.textContent = `The lake shore as it was then (from: ${shore})`;
   if (document.activeElement !== $("slider") || state.playing) $("slider").value = String(state.year);
 }
 

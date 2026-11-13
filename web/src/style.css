@@ -24,7 +24,7 @@ html, body {
 
 #map { position: absolute; inset: 0 0 72px 0; }
 
-#population, #story, #info, #legend, #shoreline-note, #panel {
+#population, #story, #info, #legend, #panel {
   position: absolute;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -55,13 +55,10 @@ html, body {
 #story-close { position: absolute; top: 8px; right: 8px; color: var(--muted); }
 #story-source { margin-left: auto; font-size: 12px; color: var(--muted); }
 
-#legend { right: 20px; top: 176px; padding: 10px 12px; font-size: 12px; line-height: 1.7; }
+#legend { right: 20px; top: 134px; padding: 10px 12px; font-size: 12px; line-height: 1.7; }
 #legend .swatch { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 7px; vertical-align: -1px; }
 #legend .count { color: var(--muted); margin-left: 6px; }
 
-#shoreline-note { top: 134px; right: 20px; border-radius: 10px; padding: 6px 12px; font-size: 12px; color: var(--muted); }
-#shoreline-note.photo::before { display: none; }
-#shoreline-note::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 7px; vertical-align: -2px; border-radius: 2px; background: #b5cfe0; border: 1px solid #8fb0c6; }
 
 /* The panel of layers, top left: the sun and the weather, then a switch for each layer with a
    line on what it is and more behind the "i". */

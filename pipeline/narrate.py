@@ -2,7 +2,11 @@
 web/public/data/narration.json, which says which file belongs to which stop.
 
 The voice is "David Baker" from ElevenLabs' voice library (text to speech; the key is in ~/.config/secrets/ELEVENLABS_API_KEY).
-A file is named after its text, so only stops whose title or text changed are made again.
+A file is named after its text, so only stops whose text changed are made again.
+
+A few stops have a sound under the voice (the `sound` column of story.csv): web/public/audio/fx-<name>.mp3,
+made once with ElevenLabs' sound effects from the descriptions in SOUNDS, 20 seconds each, played
+quietly and in a loop by the page.
 
 Run: uv run pipeline/narrate.py
 """
@@ -16,6 +20,13 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 AUDIO = ROOT / "web" / "public" / "audio"
 VOICE = "fxnZk29PIJ3WKEC9MDEo"     # David Baker: a calm, mature Canadian narrator
 MODEL = "eleven_multilingual_v2"
+SOUNDS = {
+    "battle": "A distant battle in 1813: scattered musket volleys and a few cannon shots across open ground, no voices, no music",
+    "fire": "A large city fire at night: timber crackling and roaring flames, distant men shouting, a fire bell ringing far away, no music",
+    "train": "A small steam locomotive of the 1850s pulling away slowly: chuffing, hissing steam, one whistle, no music",
+    "storm": "A violent storm on a lake shore: strong wind and heavy waves breaking on sand, no thunder, no music",
+    "hooves": "Horses' hooves walking on a cobbled city street pulling a streetcar on rails, a small bell now and then, no voices, no music",
+}
 
 if __name__ == "__main__":
     key = (pathlib.Path.home() / ".config" / "secrets" / "ELEVENLABS_API_KEY").read_text().strip().split("=")[-1]
@@ -33,8 +44,16 @@ if __name__ == "__main__":
         (AUDIO / name).write_bytes(urllib.request.urlopen(req, timeout=120).read())
         made += 1
         print("made", name, stop["title"], flush=True)
+    for name, description in SOUNDS.items():
+        if (AUDIO / f"fx-{name}.mp3").exists():
+            continue
+        body = json.dumps({"text": description, "duration_seconds": 20, "prompt_influence": 0.5}).encode()
+        req = urllib.request.Request("https://api.elevenlabs.io/v1/sound-generation?output_format=mp3_44100_64", body,
+                                     {"xi-api-key": key, "content-type": "application/json"})
+        (AUDIO / f"fx-{name}.mp3").write_bytes(urllib.request.urlopen(req, timeout=180).read())
+        print("made sound", name, flush=True)
     for old in AUDIO.glob("*.mp3"):
-        if old.name not in files:
+        if old.name not in files and not old.name.startswith("fx-"):
             old.unlink()
     (ROOT / "web" / "public" / "data" / "narration.json").write_text(json.dumps(files))
     print(f"{made} made, {len(files)} in all, {sum((AUDIO / f).stat().st_size for f in files) / 1e6:.1f} MB")
