@@ -1259,6 +1259,8 @@ function fillCard(i) {
   $("story-title").textContent = s.title;
   $("story-text").textContent = s.text;
   $("story-source").href = s.url;
+  // the last stop gives an address to write to in place of a source
+  $("story-source").textContent = s.url.startsWith("mailto:") ? s.url.slice(7) : "source";
   $("story-progress").firstElementChild.style.width = "0";
   document.querySelectorAll("#event-ticks .tick").forEach((t, k) => t.classList.toggle("current", k === i));
 }
