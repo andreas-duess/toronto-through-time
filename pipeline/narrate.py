@@ -25,7 +25,7 @@ MODEL = "eleven_multilingual_v2"
 SOUNDS = {
     "battle": "A distant battle in 1813: scattered musket volleys and a few cannon shots across open ground, no voices, no music",
     "fire": "A large city fire at night: timber crackling and roaring flames, distant men shouting, a fire bell ringing far away, no music",
-    "train": "A steam locomotive starting off and gathering speed: loud rhythmic chuff chuff chuff of the engine getting faster, wheels clacking on rails, one long steam whistle, no continuous hiss, no music",
+    "train": "Close recording of an old steam locomotive pulling a train at walking pace: slow heavy rhythmic chuff, chuff, chuff, chuff of the engine and iron wheels clanking over rail joints. No whistle, no horn, no siren, no bell, no hiss, no music",
     "fair": "A busy outdoor country fair in the 1870s: a happy crowd milling about, hand bells ringing, a barker calling out, farm animals in the distance, no music, no modern sounds",
     "boo": "A room of about thirty men in a council chamber in the 1890s booing, jeering and grumbling angrily, a gavel banging, no music, no modern sounds",
     "building": "Men building log houses in a forest clearing in the 1790s: several hammers hammering on wood, a hand saw, axes chopping, men shouting to each other, no machines, no music, no modern sounds",
