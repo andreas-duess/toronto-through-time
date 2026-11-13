@@ -39,11 +39,12 @@ export function sunAt(day, minute) {
 
 // The sun, and the light of the sky from above for the sides the sun does not reach. A low sun
 // is warmer and weaker.
-function lights({ direction, height }, shadows) {
+// Under cloud (0 to 1) the sun is weaker and the light from all sides stronger.
+function lights({ direction, height, cloud = 0 }, shadows) {
   const low = 1 - Math.min(1, height / 0.5);
   return {
-    ambient: new AmbientLight({ color: [255, 255, 255], intensity: 1 }),
-    sun: new DirectionalLight({ color: [255, 250 - 30 * low, 240 - 70 * low], intensity: (shadows ? 0.85 : 1) - 0.15 * low, direction, _shadow: shadows }),
+    ambient: new AmbientLight({ color: [255, 255, 255], intensity: 1 + 0.22 * cloud }),
+    sun: new DirectionalLight({ color: [255, 250 - 30 * low, 240 - 70 * low], intensity: ((shadows ? 0.85 : 1) - 0.15 * low) * (1 - 0.75 * cloud), direction, _shadow: shadows }),
     sky: new DirectionalLight({ color: [225, 235, 255], intensity: shadows ? 0.2 : 0.3, direction: [-direction[0] * 0.4, -direction[1] * 0.4, -1] }),
   };
 }

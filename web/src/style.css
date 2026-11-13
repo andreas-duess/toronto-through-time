@@ -61,6 +61,9 @@ html, body {
 
 #sun { left: 50%; top: 16px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 5px 12px; font-size: 13px; }
 #sun[hidden] { display: none; }
+#weather-now { padding-left: 10px; border-left: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+#falling { position: absolute; inset: 0 0 64px 0; width: 100%; height: calc(100% - 64px); z-index: 1; pointer-events: none; }
+#falling[hidden] { display: none; }
 #sun-slider { width: 150px; margin: 0; accent-color: var(--accent); }
 #sun-time { min-width: 58px; font-variant-numeric: tabular-nums; }
 #sun-now { padding: 1px 8px; font: inherit; font-size: 12px; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 5px; cursor: pointer; }

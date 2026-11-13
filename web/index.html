@@ -17,6 +17,7 @@
   </head>
   <body>
     <div id="map"></div>
+    <canvas id="falling" hidden></canvas>
 
     <div id="population">
       <div class="label">Population</div>
@@ -46,6 +47,7 @@
       <input id="sun-slider" type="range" step="5" aria-label="Time of day" />
       <output id="sun-time"></output>
       <button id="sun-now" hidden>now</button>
+      <span id="weather-now" hidden title="The weather in Toronto now"></span>
     </div>
 
     <div id="rotate-hint" hidden></div>

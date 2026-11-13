@@ -10,6 +10,8 @@ import { loadTrees, treeMesh, TREE_COLORS } from "./trees.js";
 import { SunEffect, today, sunAt, clock } from "./sun.js";
 import { loadRoofs, roofMesh } from "./roofs.js";
 import { watchTransit, transitNow, transitName, boxMesh } from "./transit.js";
+import { watchBikes, bikeStations } from "./bikes.js";
+import { weather, watchWeather, fall } from "./weather.js";
 
 const $ = (id) => document.getElementById(id);
 const DATA = "./data/";
@@ -136,7 +138,8 @@ function hintRotate() {
 hintRotate();
 // the trees come and go with the zoom
 let treesOn = 0;
-map.on("zoom", () => { if (meta && (treeSets() !== treesOn || transitOn())) render(); });
+let bikesShown = false;
+map.on("zoom", () => { if (meta && (treeSets() !== treesOn || transitOn() || bikesOn() !== bikesShown)) render(); });
 // and so do the batches of buildings, with the view
 let drawn = "";
 map.on("move", () => { if (buildings && drawnKey() !== drawn) render(); });
@@ -211,6 +214,49 @@ function runTransit() {
   transitFrame = requestAnimationFrame(tick);
 }
 document.addEventListener("visibilitychange", () => { if (meta) runTransit(); });
+
+// Bike Share stations, in today's year: a post per station, taller the more bikes it has now,
+// grey when it has none and amber when it has no free dock.
+const BIKE_ZOOM = 13.5;
+const BIKE_COLORS = { some: [0, 148, 92], none: [165, 165, 165], full: [226, 150, 0] };
+const today_ = () => Boolean(meta) && state.year >= meta.lastYear - 0.05;
+const bikesOn = () => today_() && map.getZoom() >= BIKE_ZOOM;
+function bikeLayer() {
+  const larger = Math.max(1, 2 ** (TRUE_SIZE_ZOOM - map.getZoom()) * 0.75);
+  return new SimpleMeshLayer({
+    id: "bikes",
+    beforeId: map.getLayer("places-city") ? "places-city" : undefined,
+    data: bikeStations(),
+    mesh: BOX_MESH,
+    getPosition: (s) => s.position,
+    getScale: (s) => [2.4, 2.4, 3 + Math.min(40, s.bikes) * 0.4],
+    getColor: (s) => (s.bikes === 0 ? BIKE_COLORS.none : s.docks === 0 ? BIKE_COLORS.full : BIKE_COLORS.some),
+    sizeScale: larger,
+    material: MATERIAL,
+    pickable: true,
+  });
+}
+
+// Today's weather, in today's year: cloud dims the sun, rain and snow fall over the map, and
+// lying snow whitens the ground and the sloped roofs.
+const SNOW = "#f4f5f3";
+let weatherShown = "";
+function showWeather() {
+  const on = today_() && weather.known;
+  watchWeather(today_(), render);
+  const key = on ? `${weather.cloud}|${weather.rain}|${weather.snow}|${weather.lying}` : "";
+  if (key === weatherShown || !map.getLayer("streets")) return;
+  weatherShown = key;
+  sun.cloud = on ? weather.cloud : 0;
+  LIGHTING.setSun(sun);
+  fall($("falling"), on ? weather.rain : 0, on ? weather.snow : 0, weather.wind);
+  const white = on && (weather.lying || weather.snow > 0);
+  map.setPaintProperty("background", "background-color", white ? SNOW : LAND_COLOR);
+  if (map.getLayer("parks")) map.setPaintProperty("parks", "fill-color", white ? "#e6ece0" : PARK_COLOR);
+  $("weather-now").hidden = !on || !weather.text;
+  $("weather-now").textContent = weather.text;
+}
+const roofColor = () => (weatherShown && (weather.lying || weather.snow > 0) ? [236, 238, 236] : ROOF_COLOR);
 
 // Sloped roofs of the houses. They come in ROOF_SETS sets in order of their year. A set whose
 // houses are all older than NEW_SPAN is drawn as it is; the roofs of newer houses are drawn apart,
@@ -443,11 +489,11 @@ function roofLayer(id, from, to, settled) {
       return [roofs.size[k], roofs.size[k + 1], roofs.size[k + 3] * (settled ? 1 : grown(index))];
     },
     getOrientation: (_, { index }) => [0, roofs.size[(from + index) * 5 + 4], 0],
-    getColor: settled || state.quality ? ROOF_COLOR : (_, { index }) => {
+    getColor: settled || state.quality ? roofColor() : (_, { index }) => {
       const k = Math.min(1, Math.max(0, (state.year - year(index) - RISE_YEARS) / (NEW_SPAN - RISE_YEARS)));
-      return ROOF_COLOR.map((c, n) => c * (NEW_TINT[n] + (1 - NEW_TINT[n]) * k));
+      return roofColor().map((c, n) => c * (NEW_TINT[n] + (1 - NEW_TINT[n]) * k));
     },
-    updateTriggers: settled ? {} : { getPosition: state.year, getScale: state.year, getColor: [state.year, state.quality] },
+    updateTriggers: settled ? { getColor: weatherShown } : { getPosition: state.year, getScale: state.year, getColor: [state.year, state.quality, weatherShown] },
     material: MATERIAL,
   });
 }
@@ -688,11 +734,14 @@ function updateWater(year) {
 
 function render() {
   const y = Math.floor(state.year);
+  showWeather();
   const shore = updateWater(state.year);
   updateMap(state.year);
-  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(lost ? lostLayers() : []), ...buildingLayers(), ...(roofs ? roofLayers() : []), ...landmarkLayers(), ...(trees ? treeLayers() : []), ...(transitOn() ? [transitLayer()] : [])] });
+  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(lost ? lostLayers() : []), ...buildingLayers(), ...(roofs ? roofLayers() : []), ...landmarkLayers(), ...(trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(transitOn() ? [transitLayer()] : [])] });
   runTransit();
+  watchBikes(bikesOn(), render);
   treesOn = treeSets();
+  bikesShown = bikesOn();
   drawn = drawnKey();
   writeHash();
 
@@ -926,6 +975,11 @@ function closeStory() {
 }
 
 function showBuilding(info) {
+  if (info.picked && info.layer?.id === "bikes") {
+    const s = info.object;
+    return showInfo(s.name, [["Bikes", s.ebikes ? `${s.bikes}, of them ${s.ebikes} electric` : s.bikes], ["Free docks", s.docks],
+      ["Source", "Bike Share Toronto, live counts"]]);
+  }
   if (info.picked && info.layer?.id === "transit") {
     return showInfo(transitName(info.object), [["Route", info.object.route], ["Vehicle", info.object.id],
       ["Source", "TTC live vehicle positions, up to 30 seconds old"]]);
