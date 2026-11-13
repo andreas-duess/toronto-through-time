@@ -12,6 +12,7 @@ import { loadRoofs, roofMesh } from "./roofs.js";
 import { watchTransit, transitNow, transitName, boxMesh } from "./transit.js";
 import { watchBikes, bikeStations } from "./bikes.js";
 import { weather, watchWeather, fall } from "./weather.js";
+import { loadPhotos, photoPins, photo, cameraIcon } from "./photos.js";
 
 const $ = (id) => document.getElementById(id);
 const DATA = "./data/";
@@ -139,7 +140,7 @@ hintRotate();
 // the trees come and go with the zoom
 let treesOn = 0;
 let bikesShown = false;
-map.on("zoom", () => { if (meta && (treeSets() !== treesOn || transitOn() || bikesOn() || bikesShown)) render(); });
+map.on("zoom", () => { if (meta && (treeSets() !== treesOn || transitOn() || bikesOn() || bikesShown || photosShow.on)) render(); });
 // and so do the batches of buildings, with the view
 let drawn = "";
 map.on("move", () => { if (buildings && drawnKey() !== drawn) render(); });
@@ -252,6 +253,50 @@ function bikeLayer() {
     sizeUnits: "pixels",
     pickable: true,
   });
+}
+
+// Archive photographs taken around the year on the slider, as camera pins (the Photos button).
+// A pin stands for every picture within about its own width, so there are fewer from further
+// away. Pins show through buildings: many pictures are placed at the middle of a building.
+const PHOTO_ZOOM = 13;
+const CAMERA_ICON = cameraIcon();
+const photosShow = { on: true, loaded: false, key: "", pins: [] };
+function photoLayer() {
+  const size = Math.min(28, Math.max(14, 14 + (map.getZoom() - PHOTO_ZOOM) * 5));
+  // pictures closer than a pin's width (in degrees of longitude) share a pin
+  const cell = (size * 360) / (512 * 2 ** (Math.round(map.getZoom() * 2) / 2));
+  const key = `${Math.floor(state.year)}|${cell}`;
+  if (key !== photosShow.key) Object.assign(photosShow, { key, pins: photoPins(Math.floor(state.year), cell) });
+  return new IconLayer({
+    id: "photos",
+    beforeId: map.getLayer("places-city") ? "places-city" : undefined,
+    data: photosShow.pins,
+    iconAtlas: CAMERA_ICON,
+    iconMapping: { camera: { x: 0, y: 0, width: 96, height: 96, anchorY: 96 } },
+    getIcon: () => "camera",
+    getPosition: (p) => p.position,
+    getSize: size,
+    sizeUnits: "pixels",
+    parameters: { depthCompare: "always", depthWriteEnabled: false },
+    pickable: true,
+  });
+}
+const photosOn = () => photosShow.on && photosShow.loaded && map.getZoom() >= PHOTO_ZOOM;
+
+// The card for a pin: one picture at a time, the nearest in year first.
+function showPhotos(ids, n) {
+  const p = photo(ids[n]);
+  const box = $("info");
+  box.hidden = false;
+  box.className = "photo";
+  box.innerHTML = `<button class="close" aria-label="Close">✕</button>` +
+    `<a href="${escapeHtml(p.image)}" target="_blank" rel="noopener"><img src="${escapeHtml(p.image)}" alt=""></a>` +
+    `<p class="caption">${escapeHtml(p.title)}, ${escapeHtml(p.year)}</p>` +
+    `<p class="credit">City of Toronto Archives, ${escapeHtml(p.citation)}. Placed on the map by OldTO from its title.</p>` +
+    (ids.length > 1 ? `<div class="turn"><button class="prev" aria-label="Previous">‹</button><span>${n + 1} of ${ids.length} here</span><button class="next" aria-label="Next">›</button></div>` : "");
+  box.querySelector(".close").addEventListener("click", () => { box.hidden = true; });
+  box.querySelector(".prev")?.addEventListener("click", () => showPhotos(ids, (n + ids.length - 1) % ids.length));
+  box.querySelector(".next")?.addEventListener("click", () => showPhotos(ids, (n + 1) % ids.length));
 }
 
 // Today's weather, in today's year: cloud dims the sun, rain and snow fall over the map, and
@@ -389,6 +434,7 @@ async function load() {
   $("loading").classList.add("done");
   roofs = await loadRoofs(DATA).catch(() => null);
   if (roofs) for (let i = 0; i < roofs.length; i++) roofRise.set(roofs.ids[i], roofs.size[i * 5 + 3]);
+  loadPhotos(DATA + "photos.json").then(() => { photosShow.loaded = true; render(); }).catch(() => {});
   // the trees come after everything else; the page does not wait for them
   loadTrees(DATA).then((t) => { trees = t; render(); }).catch(() => {});
 }
@@ -754,7 +800,7 @@ function render() {
   showWeather();
   const shore = updateWater(state.year);
   updateMap(state.year);
-  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(lost ? lostLayers() : []), ...buildingLayers(), ...(roofs ? roofLayers() : []), ...landmarkLayers(), ...(trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(transitOn() ? [transitLayer()] : [])] });
+  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(lost ? lostLayers() : []), ...buildingLayers(), ...(roofs ? roofLayers() : []), ...landmarkLayers(), ...(trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(photosOn() ? [photoLayer()] : []), ...(transitOn() ? [transitLayer()] : [])] });
   runTransit();
   watchBikes(bikesOn(), render);
   treesOn = treeSets();
@@ -842,6 +888,11 @@ function setupControls() {
   slider.addEventListener("input", () => { pauseStory(); state.year = Number(slider.value); cardFollowsYear(); render(); });
   $("play").addEventListener("click", () => setPlaying(!state.playing));
   $("speed").addEventListener("change", (e) => { state.speed = Number(e.target.value); });
+  $("photos").addEventListener("click", () => {
+    photosShow.on = !photosShow.on;
+    $("photos").setAttribute("aria-pressed", String(photosShow.on));
+    render();
+  });
   $("quality").addEventListener("click", () => {
     state.quality = !state.quality;
     $("quality").setAttribute("aria-pressed", String(state.quality));
@@ -992,6 +1043,7 @@ function closeStory() {
 }
 
 function showBuilding(info) {
+  if (info.picked && info.layer?.id === "photos") return showPhotos(info.object.ids, 0);
   if (info.picked && info.layer?.id === "bikes") {
     const s = info.object;
     return showInfo(s.name, [["Bikes", s.ebikes ? `${s.bikes}, of them ${s.ebikes} electric` : s.bikes], ["Free docks", s.docks],
@@ -1043,6 +1095,7 @@ function showBuilding(info) {
 function showInfo(title, rows) {
   const box = $("info");
   box.hidden = false;
+  box.className = "";
   box.innerHTML = `<button class="close" aria-label="Close">✕</button><h3>${escapeHtml(title)}</h3><table>` +
     rows.map(([k, v]) => `<tr><td>${k}</td><td>${typeof v === "string" && v.startsWith("<a ") ? v : escapeHtml(String(v))}</td></tr>`).join("") +
     "</table>";

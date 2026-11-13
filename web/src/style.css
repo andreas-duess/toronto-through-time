@@ -76,6 +76,12 @@ html, body {
   background: var(--panel); border: solid var(--line); border-width: 1px 1px 0 0; transform: rotate(45deg); }
 
 #info { right: 60px; bottom: 104px; width: 280px; padding: 12px 14px; font-size: 13px; }
+#info.photo { width: 380px; max-width: calc(100vw - 32px); }
+#info.photo img { display: block; width: 100%; max-height: 300px; object-fit: contain; background: #1d1d1d; border-radius: 4px; margin: 20px 0 8px; cursor: zoom-in; }
+#info.photo .caption { font-family: var(--serif); font-size: 15px; line-height: 1.35; margin: 0 0 4px; }
+#info.photo .credit { font-size: 11.5px; color: var(--muted); margin: 0; }
+#info.photo .turn { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+#info.photo .turn button { padding: 2px 10px; font: inherit; background: #fff; border: 1px solid var(--line); border-radius: 5px; cursor: pointer; }
 #info h3 { margin: 0 22px 6px 0; font-size: 15px; }
 #info table { border-collapse: collapse; }
 #info td { padding: 2px 10px 2px 0; vertical-align: top; }
@@ -115,7 +121,7 @@ html, body {
   #year-label { font-size: 56px; left: 16px; }
   #population-value { font-size: 20px; }
   #story-text { font-size: 14px; }
-  #quality, #sources-link { display: none; }
+  #quality, #sources-link, #photos { display: none; }
   #comments-link { white-space: nowrap; }
   #speed, #sun { display: none !important; }
   #info { left: 16px; width: auto; }
