@@ -70,7 +70,7 @@ const story = { index: -1, playing: false, run: 0, voice: true, narration: null,
 // A few stops have a sound under the voice (a battle, a fire, hooves): quiet, in a loop, fading in and out.
 const SOUND_LEVEL = 0.16;
 // some louder, some softer
-const SOUND_LEVELS = { fire: 0.34, storm: 0.13, lastpost: 0.3, cheer: 0.11 };
+const SOUND_LEVELS = { fire: 0.34, storm: 0.13, lastpost: 0.3, cheer: 0.09 };
 // heard for this many seconds only, then faded out
 const SOUND_SECONDS = { building: 9 };
 // played once, not in a loop
