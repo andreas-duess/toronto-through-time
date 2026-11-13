@@ -94,9 +94,51 @@ def load_buildings():
     lidar = b.HEIGHT_SRC == "Lidar-Derived"
     b["roof_avg"], b["roof_peak"] = b.AVG_HEIGHT.where(lidar), b.MAX_HEIGHT.where(lidar)
     b = b[b.area >= 8].reset_index(drop=True)
-    b = churches(b)
+    b = churches(shapes(b))
     log(f"buildings in old Toronto: {len(b):,} polygons")
     return b[["base", "top", "area", "newer_source", "church", "part_of", "roof_avg", "roof_peak", "geometry"]], old
+
+
+# ---------------------------------------------------------------- shapes
+
+def shapes(b):
+    """Gives the buildings that are more than one block their real shape.
+
+    The outline edition of the City's model has one outline per building with one height, so a
+    building with towers, wings and a deck (West Lodge) stood as one slab as tall as its highest
+    point. pipeline/shapes.py reads the blocks of such buildings off the City's detailed model.
+    Here each block goes to the outline it lies in; an outline whose blocks cover most of it is
+    replaced by them: the largest block takes the outline's place, the others are added as parts
+    of it. Blocks stand on the ground. Churches whose parts OpenStreetMap has are left as they
+    are (churches()).
+    """
+    b["church"], b["part_of"], b["shaped"] = False, np.nan, False
+    path = ROOT / "data" / "interim" / "shapes.gpkg"
+    if not path.exists():
+        return b
+    blocks = gpd.read_file(path)
+    bi, oi = b.sindex.query(blocks.geometry, predicate="intersects")
+    inside = shapely.area(shapely.intersection(blocks.geometry.values[bi], b.geometry.values[oi]))
+    pairs = pd.DataFrame({"block": bi, "outline": b.index[oi], "inside": inside})
+    pairs = pairs.sort_values("inside").drop_duplicates("block", keep="last")
+    pairs = pairs[pairs.inside >= 0.5 * blocks.geometry.area.values[pairs.block]]
+    worship, parts = osm_polygons("worship.json"), osm_polygons("parts.json")
+    mapped = worship.iloc[np.unique(worship.sindex.query(parts.geometry, predicate="intersects")[1])]
+    keep_out = set(b.index[np.unique(mapped.sindex.query(b.geometry, predicate="intersects")[0])])
+    extra = []
+    for outline, group in pairs.groupby("outline"):
+        mine = blocks.iloc[group.block.values].sort_values("height", ascending=False)
+        if outline in keep_out or len(mine) < 2 or group.inside.sum() < 0.6 * b.area[outline]:
+            continue
+        mine = mine.assign(area=mine.geometry.area).sort_values("area", ascending=False)
+        first = mine.iloc[0]
+        b.loc[outline, ["base", "top", "area", "shaped", "roof_avg", "roof_peak"]] = [0, first.height, first.area, True, np.nan, np.nan]
+        b.loc[[outline], "geometry"] = [first.geometry]
+        for block in mine.iloc[1:].itertuples():
+            extra.append({"base": 0.0, "top": block.height, "area": block.area, "geometry": block.geometry, "part_of": outline,
+                          "newer_source": b.newer_source[outline], "church": False, "shaped": True})
+    log(f"shapes: {int(b.shaped.sum()):,} outlines replaced by {int(b.shaped.sum()) + len(extra):,} blocks of the detailed model")
+    return pd.concat([b, gpd.GeoDataFrame(extra, geometry="geometry", crs=UTM)], ignore_index=True) if extra else b
 
 
 # ---------------------------------------------------------------- churches
@@ -149,7 +191,6 @@ def churches(b):
     """
     worship = osm_polygons("worship.json")
     parts = osm_polygons("parts.json")
-    b["church"] = False
     bi, wi = worship.sindex.query(b.geometry, predicate="intersects")
     inside = shapely.area(shapely.intersection(b.geometry.values[bi], worship.geometry.values[wi])) > 0.5 * b.area.values[bi]
     site = pd.Series(wi[inside], index=b.index[bi[inside]])
@@ -174,7 +215,7 @@ def churches(b):
         elif top - roof / 2 > foot:
             extra.append({"base": foot, "top": top - roof / 2, "geometry": part.geometry})
 
-    spiky = b.church & (b.HEIGHT_SRC == "Lidar-Derived") & (b.MAX_HEIGHT > 15) & (b.MAX_HEIGHT > 1.5 * b.AVG_HEIGHT.clip(lower=1))
+    spiky = b.church & ~b.shaped.astype(bool) & (b.HEIGHT_SRC == "Lidar-Derived") & (b.MAX_HEIGHT > 15) & (b.MAX_HEIGHT > 1.5 * b.AVG_HEIGHT.clip(lower=1))
     small = b.area < 150      # an outline this small is the tower itself
     guessed = 0
     for i in b.index[spiky]:
@@ -216,7 +257,6 @@ def churches(b):
     shared = shared.sort_values("area").drop_duplicates("add", keep="last")
     add["part_of"] = pd.Series(shared.of.values, index=shared["add"].values)
     add = add[add.part_of.notna()]
-    b["part_of"] = np.nan
     log(f"churches: {int(b.church.sum())} outlines on {site.nunique()} places of worship, {int(spiky.sum())} lowered to their body, "
         f"{len(mapped)} with parts from OpenStreetMap, {guessed} with a guessed tower, {len(add)} blocks added")
     return pd.concat([b, add], ignore_index=True)
