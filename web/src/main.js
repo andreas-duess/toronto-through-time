@@ -1331,7 +1331,7 @@ function showBuilding(info) {
   }
   if (info.picked && info.layer?.id === "planes") {
     const p = info.object;
-    return showInfo(p.flight || "Aircraft", [...(p.type ? [["Type", p.type]] : []), ["Height", `${p.up.toLocaleString("en-CA")} m`],
+    return showInfo(p.flight || "Aircraft", [...(p.type ? [["Type", p.type]] : []), ["Height", p.up ? `${p.up.toLocaleString("en-CA")} m` : "on the ground"],
       ["Speed", `${Math.round(p.speed * 3.6)} km/h`], ["From", "adsb.lol, a network of volunteers' receivers. A few seconds old."]]);
   }
   if (info.picked && info.layer?.id === "transit") {

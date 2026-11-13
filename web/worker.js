@@ -26,8 +26,13 @@ export default {
       if (!hit) {
         const r = await fetch("https://api.adsb.lol/v2/point/43.66/-79.40/22", { headers: { "user-agent": "torontothroughtime.com" } });
         const list = r.ok ? (await r.json()).ac ?? [] : [];
-        const out = list.filter((a) => Number.isFinite(a.lat) && Number.isFinite(a.lon) && Number.isFinite(a.track) && a.alt_baro !== "ground" && Number.isFinite(a.alt_baro))
-          .map((a) => [a.hex, (a.flight ?? "").trim(), a.t ?? "", a.lat, a.lon, Math.round(a.alt_baro * 0.3048), Math.round((a.gs ?? 0) * 0.5144), Math.round(a.track), Math.round(a.seen_pos ?? a.seen ?? 0)]);
+        // Aircraft on the ground are in too, at height 0. Their heading is where the nose points when
+        // they report no track. Airport vehicles (category C) and whatever has no heading are left out.
+        const heading = (a) => a.track ?? a.true_heading ?? a.mag_heading;
+        const out = list.filter((a) => Number.isFinite(a.lat) && Number.isFinite(a.lon) && Number.isFinite(heading(a))
+            && (a.alt_baro === "ground" ? !String(a.category ?? "").startsWith("C") && Boolean(a.t || a.flight) : Number.isFinite(a.alt_baro)))
+          .map((a) => [a.hex, (a.flight ?? "").trim(), a.t ?? "", a.lat, a.lon, a.alt_baro === "ground" ? 0 : Math.round(a.alt_baro * 0.3048),
+            Math.round((a.gs ?? 0) * 0.5144), Math.round(heading(a)), Math.round(a.seen_pos ?? a.seen ?? 0)]);
         hit = Response.json({ at: Date.now(), planes: out }, { headers: { "cache-control": "public, max-age=10" } });
         if (r.ok) await caches.default.put(key, hit.clone());
       }
