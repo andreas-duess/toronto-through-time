@@ -73,6 +73,8 @@ const SOUND_LEVEL = 0.16;
 const SOUND_LEVELS = { fire: 0.34, storm: 0.13, lastpost: 0.3, cheer: 0.09 };
 // heard for this many seconds only, then faded out
 const SOUND_SECONDS = { building: 9 };
+// started only when the voice is this far through the stop (0 to 1)
+const SOUND_FROM = { bell: 0.72 };
 // played once, not in a loop
 const SOUND_ONCE = new Set(["lastpost"]);
 function fadeSound(sound, to, ms, then) {
@@ -109,9 +111,15 @@ function narrate(i) {
     under.loop = !SOUND_ONCE.has(stops[i].sound);
     under.volume = 0;
     story.sound = under;
-    const seconds = SOUND_SECONDS[stops[i].sound];
-    if (seconds) setTimeout(() => { if (story.sound === under) { story.sound = null; fadeSound(under, 0, 2500, () => under.pause()); } }, seconds * 1000);
-    under.play().then(() => fadeSound(under, SOUND_LEVELS[stops[i].sound] ?? SOUND_LEVEL, 1500)).catch(() => { if (story.sound === under) story.sound = null; });
+    const begin = () => {
+      if (story.sound !== under || !under.paused) return;
+      const seconds = SOUND_SECONDS[stops[i].sound];
+      if (seconds) setTimeout(() => { if (story.sound === under) { story.sound = null; fadeSound(under, 0, 2500, () => under.pause()); } }, seconds * 1000);
+      under.play().then(() => fadeSound(under, SOUND_LEVELS[stops[i].sound] ?? SOUND_LEVEL, 1500)).catch(() => { if (story.sound === under) story.sound = null; });
+    };
+    const from = SOUND_FROM[stops[i].sound];
+    if (!from) begin();
+    else sound.addEventListener("timeupdate", () => { if (sound.duration && sound.currentTime / sound.duration >= from) begin(); });
     // it fades out as the voice ends
     sound.addEventListener("ended", () => { if (story.sound === under) { story.sound = null; fadeSound(under, 0, 1800, () => under.pause()); } });
   }
