@@ -343,6 +343,117 @@
      43.6533
     ]
    }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "move",
+    "side": "british",
+    "label": "Government troops march north, December 7",
+    "from": 1837,
+    "to": 1839
+   },
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      -79.3792,
+      43.6524
+     ],
+     [
+      -79.3857,
+      43.6705
+     ],
+     [
+      -79.3925,
+      43.6845
+     ],
+     [
+      -79.3937,
+      43.688
+     ],
+     [
+      -79.3966,
+      43.698
+     ],
+     [
+      -79.3984,
+      43.7065
+     ],
+     [
+      -79.3989,
+      43.7086
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "point",
+    "side": "rebel",
+    "label": "Montgomery's Tavern\nthe rebels gather here; burned December 7",
+    "from": 1837,
+    "to": 1839
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -79.399,
+     43.7092
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "point",
+    "side": "rebel",
+    "label": "Rebels wait in the woods",
+    "from": 1837,
+    "to": 1839
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -79.3992,
+     43.7022
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "point",
+    "side": "british",
+    "label": "Gallows Hill\nthe rebels see the troops coming",
+    "from": 1837,
+    "to": 1839
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -79.3925,
+     43.6845
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "point",
+    "side": "british",
+    "label": "1,200 men and two cannons set out at noon",
+    "from": 1837,
+    "to": 1839
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -79.3792,
+     43.6524
+    ]
+   }
   }
  ]
 }
