@@ -580,6 +580,30 @@ def apply_names(b, ap):
     b["name"] = b.name.fillna(b.index.to_series().map(own)).fillna(b.index.to_series().map(on))
     # every part of a named building carries the name
     b["name"] = b.name.fillna(b.groupby("group").name.transform("first"))
+    # A school or a hospital is often several outlines in the City's model and one building in
+    # OpenStreetMap. Outlines without a name inside the box around a named building take its
+    # name (not for boxes over 1.5 ha, which take in the neighbours).
+    boxes = gpd.GeoDataFrame(
+        {"osm_name": [e["tags"]["name"] for e in named]},
+        geometry=[shapely.box(e["bounds"]["minlon"], e["bounds"]["minlat"], e["bounds"]["maxlon"], e["bounds"]["maxlat"]) for e in named],
+        crs=4326).to_crs(UTM)
+    boxes = boxes[boxes.area <= 15000]
+    cen = gpd.GeoDataFrame(geometry=b.geometry.centroid, crs=UTM)
+    boxed = gpd.sjoin(cen, boxes, predicate="within").groupby(level=0).osm_name.first()
+    b["name"] = b.name.fillna(b.index.to_series().map(boxed))
+    # ... and where one part of a named building has a year on record and another only a guess,
+    # the guess gives way to the record. (An addition built later is then dated too early.)
+    # Only within 200 m: a name can stand for a chain of shops across the city.
+    cx, cy = b.geometry.centroid.x, b.geometry.centroid.y
+    rec = b[b.name.notna() & (b.tier < ESTIMATE)]
+    rec = pd.DataFrame({"name": rec.name, "rx": cx[rec.index], "ry": cy[rec.index], "ryear": rec.year})
+    gue = b[b.name.notna() & (b.tier == ESTIMATE)]
+    pairs = pd.DataFrame({"i": gue.index, "name": gue.name, "x": cx[gue.index], "y": cy[gue.index]}).merge(rec, on="name")
+    pairs = pairs[np.hypot(pairs.x - pairs.rx, pairs.y - pairs.ry) <= 200]
+    near = pairs.groupby("i").ryear.min()
+    guessed = b.index.isin(near.index)
+    b.loc[near.index, "year"] = near.values
+    log(f"  {int(guessed.sum()):,} parts of named buildings take the year of the part on record")
     log(f"  names: {before:,} from the registers, {b.name.notna().sum() - before:,} more from OpenStreetMap")
 
     a = gpd.GeoDataFrame(ap[["address"]], geometry=gpd.points_from_xy(ap.lon, ap.lat), crs=4326).to_crs(UTM)

@@ -38,17 +38,26 @@ DISTRICT = (-79.412, 43.636, -79.352, 43.674)
 # box and the plans that draw it in detail
 AREAS = {
     "island": ((-79.405, 43.609, -79.348, 43.636), [1913, 1924]),
-    # the old Trinity College on Queen Street West, now Trinity Bellwoods Park
-    "trinity": ((-79.4195, 43.6440, -79.4105, 43.6515), [1889, 1903, 1913, 1924]),
+    # (the old Trinity College on Queen Street West was read on its own at first; the district
+    # and Parkdale now cover it between them, and its files were set aside so nothing is read twice)
     # Parkdale and the streets between it and the district: Bathurst Street to Roncesvalles
     # Avenue, the lake to Dundas Street. A village of its own until 1889.
     "parkdale": ((-79.452, 43.628, -79.412, 43.655), [1889, 1903, 1913, 1924]),
+    # The rest of the old city, in boxes that do not overlap the ones above: the west end to the
+    # Humber, everything north of Bloor Street, and east of the Don. The plans do not reach all
+    # of it in every year; where a year has no plate, nothing is read.
+    "west": ((-79.495, 43.628, -79.452, 43.655), [1889, 1903, 1913, 1924]),
+    "northwest": ((-79.495, 43.655, -79.412, 43.674), [1880, 1889, 1903, 1913, 1924]),
+    "north": ((-79.495, 43.674, -79.352, 43.735), [1880, 1889, 1903, 1913, 1924]),
+    "east": ((-79.352, 43.640, -79.276, 43.735), [1880, 1889, 1903, 1913, 1924]),
 }
 Z = 18            # about 0.43 m of ground per pixel here
 CHUNK = 6         # tiles per side worked on at once
 UTM = 26917
 EARTH = 20037508.342789244
 
+VIVID = 30        # a building's colour: brightest channel less weakest, on average, at least
+BRIGHT = 180      # ... and its brightest channel, on average, at least
 STRONGER = 26     # how far below the paper a building's weakest colour channel lies (0-255)
 INK = 115         # brightest channel darker than this is an ink line
 MIN_M2, MAX_M2 = 18, 30000
@@ -99,6 +108,15 @@ def read_buildings(rgb):
     walls = ink & ~ndimage.binary_opening(ink, iterations=3)   # thin ink only: outlines, not black fills
     labels, _ = ndimage.label(filled & ~walls)
     wood = (rgb[..., 1] - rgb[..., 2]) > 1.2 * (rgb[..., 0] - rgb[..., 1])
+    # A building is a bright, strong colour. Outside the detailed plates the atlas shows through
+    # with its index map, whose brown lettering and stained paper would otherwise be read as
+    # thousands of small buildings: those are dull, or dark.
+    ids = np.arange(1, labels.max() + 1)
+    if len(ids):
+        strong = ndimage.mean(brightest - weakest, labels, ids) >= VIVID
+        bright = ndimage.mean(brightest, labels, ids) >= BRIGHT
+        labels = np.where(np.r_[False, strong & bright][labels], labels, 0)
+        labels, _ = ndimage.label(labels > 0)      # numbered again without gaps
     return labels, wood
 
 

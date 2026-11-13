@@ -1,7 +1,7 @@
 """The story read aloud: web/public/audio/<key>.mp3 for every stop of data/manual/story.csv, and
 web/public/data/narration.json, which says which file belongs to which stop.
 
-The voice is ElevenLabs' "George" (text to speech; the key is in ~/.config/secrets/ELEVENLABS_API_KEY).
+The voice is "David Baker" from ElevenLabs' voice library (text to speech; the key is in ~/.config/secrets/ELEVENLABS_API_KEY).
 A file is named after its text, so only stops whose title or text changed are made again.
 
 Run: uv run pipeline/narrate.py
@@ -14,7 +14,7 @@ import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 AUDIO = ROOT / "web" / "public" / "audio"
-VOICE = "JBFqnCBsd6RMkjVDRZzb"     # George, a storyteller's voice
+VOICE = "fxnZk29PIJ3WKEC9MDEo"     # David Baker: a calm, mature Canadian narrator
 MODEL = "eleven_multilingual_v2"
 
 if __name__ == "__main__":

@@ -198,9 +198,12 @@ def population_year(low, high, salt):
 
 if __name__ == "__main__":
     plans = {int(p.stem): gpd.read_file(p).assign(island=False) for p in sorted(PLANS.glob("[0-9][0-9][0-9][0-9].gpkg"))}
-    for p in sorted(PLANS.glob("*_*.gpkg")):  # places outside the district: the Island, Trinity College
+    for p in sorted(PLANS.glob("*_*.gpkg")):  # places outside the district: the Island, Parkdale, the rest of the old city
         year = int(p.stem[:4])
-        plans[year] = pd.concat([plans[year], gpd.read_file(p).assign(island=True)], ignore_index=True)
+        if year not in plans:
+            continue
+        # (only the Island is let off the rule that a building stands near a street)
+        plans[year] = pd.concat([plans[year], gpd.read_file(p).assign(island="island" in p.stem)], ignore_index=True)
     years = sorted(plans)
     roads = gpd.read_file(OUT / "streets.json").to_crs(UTM)
     # the later water maps leave out the open harbour, so also: nothing further than 120 m from a street
@@ -363,6 +366,34 @@ if __name__ == "__main__":
         log(f"  {r['zone']}: {inside.sum():,} pieces")
     lost = lost[~drop].reset_index(drop=True)
 
+    # data/raw/named_lost.json (pipeline/wikipedia_lost.py): lost buildings that have an article.
+    # The article gives a point; the outlines within 25 m of it, and the largest within 40 m,
+    # take the name if they stood in its years. Where their own years are guesses and the
+    # article has years, they take those too. A point can sit on the wrong building.
+    listed = ROOT / "data" / "raw" / "named_lost.json"
+    if listed.exists():
+        tree, taken = shapely.STRtree(lost.geometry.values), 0
+        for item in json.loads(listed.read_text()):
+            at = gpd.GeoSeries([shapely.Point(item["lon"], item["lat"])], crs=4326).to_crs(UTM).iloc[0]
+            near = tree.query(at.buffer(40), predicate="intersects")
+            near = near[(lost.name.values[near] < 0)
+                        & (lost.built.values[near] <= (item["gone"] or 9999))
+                        & ~(np.nan_to_num(lost.gone.values[near], nan=9999) < (item["opened"] or 0))]
+            if not len(near):
+                continue
+            close = near[shapely.distance(lost.geometry.values[near], at) <= 25]
+            pick = np.unique(np.r_[close, near[np.argmax(lost.geometry.values[near].area)]])
+            lost.loc[pick, "name"] = len(zone_names)
+            zone_names.append({"name": item["name"], "url": item["url"], "years": bool(item["opened"] or item["gone"])})
+            guess = pick[lost.guess.values[pick]]
+            if item["gone"]:
+                lost.loc[guess, "gone"] = np.maximum(item["gone"], lost.built.values[guess] + 1)
+            if item["opened"]:
+                early = guess[lost.built.values[guess] > item["opened"]]
+                lost.loc[early[~lost.kept.values[early]], "built"] = max(item["opened"], 1793)
+            taken += 1
+        log(f"  named from articles: {taken} buildings, {int((lost.name >= len(zone_names) - taken).sum())} outlines")
+
     # for build.py: the year by which today's undated buildings were standing
     found = np.flatnonzero(since >= 0)
     before = np.array(years)[np.maximum(since[found] - 1, 0)]
@@ -373,6 +404,19 @@ if __name__ == "__main__":
         f.write("lon,lat,year\n")
         for t, y in zip(found, by):
             f.write(f"{cen.iloc[t].x:.6f},{cen.iloc[t].y:.6f},{int(y)}\n")
+
+    # no next plan and no successor, but a street laid out since runs over the ground: gone the
+    # year before the street (the Gardiner Expressway through south Parkdale)
+    newer = gpd.read_file(OUT / "streets.json").to_crs(UTM)
+    newer = newer[newer.y > years[-1]].reset_index(drop=True)
+    paved = shapely.buffer(newer.geometry.values, np.where(newer.kind >= 4, 25, np.where(newer.kind >= 3, 12, 8)), cap_style="flat")
+    open_end = np.flatnonzero(lost.gone.isna().values)
+    oi, si = shapely.STRtree(paved).query(lost.geometry.values[open_end], predicate="intersects")
+    under = shapely.area(shapely.intersection(lost.geometry.values[open_end[oi]], paved[si])) >= 0.3 * lost.geometry.values[open_end[oi]].area
+    street_year = np.full(len(open_end), 9999)
+    np.minimum.at(street_year, oi[under], newer.y.values[si[under]])
+    lost.loc[open_end[street_year < 9999], "gone"] = street_year[street_year < 9999] - 1
+    log(f"  gone for a street laid out later: {(street_year < 9999).sum():,}")
 
     # no next plan and no successor: the typical year the lost neighbours with a successor went
     unknown = lost.gone.isna().values
@@ -399,7 +443,11 @@ if __name__ == "__main__":
     log(f"lost outlines: {n:,}; end estimated from neighbours {unknown.sum():,}")
 
     lost = lost.sort_values("built", kind="stable").reset_index(drop=True)
-    geom = shapely.simplify(lost.geometry.values, 0.8)
+    # An outline that nearly fills the rectangle around it is drawn as that rectangle: the reading
+    # of the scans leaves ragged edges that the buildings did not have.
+    rect = shapely.minimum_rotated_rectangle(lost.geometry.values)
+    boxy = shapely.area(lost.geometry.values) >= 0.8 * shapely.area(rect)
+    geom = np.where(boxy, rect, shapely.simplify(lost.geometry.values, 0.8))
     geom = gpd.GeoSeries(geom, crs=UTM).to_crs(4326).values
     rings = shapely.get_exterior_ring(shapely.orient_polygons(geom))
     coords, ring_of = shapely.get_coordinates(rings, return_index=True)

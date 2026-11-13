@@ -1180,7 +1180,7 @@ function showBuilding(info) {
       [stays ? "Still here in" : "Gone by about", gone],
       ["Shape from", `the ${lost.plans[plan]} map`],
       ["Made of", brick ? "brick" : "wood"],
-      ["How we know", `This building is gone. It was drawn on an old fire insurance map. Its shape and what it was made of come from that map. ${known ? "The years come from an article about it." : estimated ? "One of the years is a guess." : "The years fall between two of the maps."} The height is a guess.`],
+      ["How we know", `This building is gone. It was drawn on an old fire insurance map. Its shape and what it was made of come from that map. ${known && known.years !== false ? "The years come from an article about it." : estimated ? "One of the years is a guess." : "The years fall between two of the maps."} The height is a guess.`],
       ...(known?.url ? [["More", `<a href="${escapeHtml(known.url)}" target="_blank" rel="noopener">article</a>`]] : []),
     ]);
   }
