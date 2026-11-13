@@ -65,6 +65,13 @@ html, body {
 #sun-time { min-width: 58px; font-variant-numeric: tabular-nums; }
 #sun-now { padding: 1px 8px; font: inherit; font-size: 12px; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 5px; cursor: pointer; }
 
+#rotate-hint {
+  position: absolute; right: 50px; bottom: 132px; z-index: 1; padding: 4px 9px; font-size: 12px; color: var(--muted);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; pointer-events: none; white-space: nowrap;
+}
+#rotate-hint::after { content: ""; position: absolute; right: -5px; top: 50%; width: 8px; height: 8px; margin-top: -5px;
+  background: var(--panel); border: solid var(--line); border-width: 1px 1px 0 0; transform: rotate(45deg); }
+
 #info { right: 60px; bottom: 104px; width: 280px; padding: 12px 14px; font-size: 13px; }
 #info h3 { margin: 0 22px 6px 0; font-size: 15px; }
 #info table { border-collapse: collapse; }
