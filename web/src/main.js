@@ -241,7 +241,7 @@ const TRUE_SIZE_ZOOM = 16;
 const STREETCAR = { size: [30, 2.5, 3.4], color: [200, 32, 38] };
 const BUS = { size: [12, 2.5, 3], color: [58, 74, 96] };
 // the switches of the two live layers in the panel
-const live = { transit: true, bikes: true, planes: true };
+const live = { transit: true, bikes: true, planes: true, weather: true };
 const transitOn = () => live.transit && Boolean(meta) && state.year >= meta.lastYear - 0.05 && map.getZoom() >= TRANSIT_ZOOM && !document.hidden;
 function transitLayer() {
   const larger = Math.max(1, 2 ** (TRUE_SIZE_ZOOM - map.getZoom()) * 0.75);
@@ -480,7 +480,7 @@ function showPhotos(ids, n) {
 const SNOW = "#f4f5f3";
 let weatherShown = "";
 function showWeather() {
-  const on = today_() && weather.known;
+  const on = live.weather && today_() && weather.known;
   watchWeather(today_(), render);
   const key = on ? `${weather.cloud}|${weather.rain}|${weather.snow}|${weather.lying}` : "";
   if (key === weatherShown || !map.getLayer("streets")) return;
@@ -1154,7 +1154,7 @@ function setupPanel() {
       about.setAttribute("aria-expanded", String(!more.hidden));
     });
   }
-  for (const key of ["transit", "bikes", "planes"]) {
+  for (const key of ["transit", "bikes", "planes", "weather"]) {
     $(key).addEventListener("click", () => {
       live[key] = !live[key];
       $(key).setAttribute("aria-pressed", String(live[key]));
