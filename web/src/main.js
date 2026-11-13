@@ -70,13 +70,13 @@ const story = { index: -1, playing: false, run: 0, voice: true, narration: null,
 // A few stops have a sound under the voice (a battle, a fire, hooves): quiet, in a loop, fading in and out.
 const SOUND_LEVEL = 0.16;
 // some louder, some softer
-const SOUND_LEVELS = { fire: 0.34, storm: 0.13, lastpost: 0.3, cheer: 0.09, toast: 0.11,
+const SOUND_LEVELS = { fire: 0.34, storm: 0.13, lastpost: 0.15, cheer: 0.09, toast: 0.11,
   // one stop apart from the others that share its sound: "<sound>@<year of the stop>"
   "cheer@1867": 0.072 };
 // heard for this many seconds only, then faded out
-const SOUND_SECONDS = { building: 9, boo: 5 };
+const SOUND_SECONDS = { building: 9, boo: 5, lastpost: 9 };
 // started only when the voice is this far through the stop (0 to 1)
-const SOUND_FROM = { bell: 0.72, boo: 0.42 };
+const SOUND_FROM = { bell: 0.72, boo: 0.42, lastpost: 0.6 };
 // played once, not in a loop
 const SOUND_ONCE = new Set(["lastpost"]);
 function fadeSound(sound, to, ms, then) {
