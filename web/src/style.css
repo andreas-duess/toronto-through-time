@@ -57,6 +57,7 @@ html, body {
 #legend .count { color: var(--muted); margin-left: 6px; }
 
 #shoreline-note { top: 116px; right: 16px; padding: 5px 10px; font-size: 12px; color: var(--muted); }
+#shoreline-note.photo::before { display: none; }
 #shoreline-note::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 7px; vertical-align: -2px; border-radius: 2px; background: #b5cfe0; border: 1px solid #8fb0c6; }
 
 #sun { left: 50%; top: 16px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 5px 12px; font-size: 13px; }
@@ -98,6 +99,7 @@ html, body {
   background: #fff; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
 }
 #controls button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+#controls button:disabled { opacity: 0.4; cursor: default; }
 #play { width: 44px; font-size: 15px; }
 
 #slider-wrap { position: relative; flex: 1; min-width: 0; }
@@ -121,7 +123,7 @@ html, body {
   #year-label { font-size: 56px; left: 16px; }
   #population-value { font-size: 20px; }
   #story-text { font-size: 14px; }
-  #quality, #sources-link, #photos { display: none; }
+  #quality, #sources-link, #photos, #aerial { display: none; }
   #comments-link { white-space: nowrap; }
   #speed, #sun { display: none !important; }
   #info { left: 16px; width: auto; }

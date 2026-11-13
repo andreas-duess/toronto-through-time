@@ -255,6 +255,45 @@ function bikeLayer() {
   });
 }
 
+// The City of Toronto's aerial photographs, as the ground in place of the drawn map (the Aerial
+// button): the one nearest the year on the slider, from the first year on. With one showing, the
+// buildings, roofs and trees are left out: the photograph has its own.
+const AERIALS = [[1931, "historic_aerial_1931"], [1939, "historic_aerial_1939"], [1954, "historic_aerial_1954"],
+  [1965, "historic_aerial_1965"], [1978, "historic_aerial_1978"], [1999, "ortho_1999_greyscale_15cm"],
+  [2003, "ortho_2003_greyscale_8cm"], [2005, "ortho_2005_color_20cm"], [2009, "ortho_2009_color_10cm"],
+  [2011, "ortho_2011_color_10cm"], [2012, "ortho_2012_color_5cm"], [2013, "ortho_2013_color_8cm"],
+  [2014, "ortho_2014_color_8cm"], [2015, "ortho_2015_color_8cm"], [2016, "ortho_2016_color_8cm"],
+  [2017, "ortho_2017_color_8cm"], [2018, "ortho_2018_color_8cm"], [2020, "ortho_2020_color_8cm"],
+  [2021, "ortho_2021_color_8cm"], [2022, "ortho_2022_color_8cm"], [2023, "ortho_2023_color_10cm"],
+  [2024, "ortho_2024_color_8cm"], [2025, "ortho_2025_color_8cm"]];
+const aerial = { on: false, shown: null };
+function updateAerial() {
+  $("aerial").disabled = state.year < AERIALS[0][0];
+  if (!map.getLayer("street-labels")) return;
+  let year = null;
+  if (aerial.on && state.year >= AERIALS[0][0]) {
+    for (const [y] of AERIALS) if (year === null || Math.abs(y - state.year) < Math.abs(year - state.year)) year = y;
+  }
+  if (year === aerial.shown) return;
+  aerial.shown = year;
+  for (const [y] of AERIALS) if (map.getLayer(`aerial-${y}`)) map.setLayoutProperty(`aerial-${y}`, "visibility", "none");
+  if (year === null) return;
+  // The 1931 photographs leave out downtown and those of 1939 the Island: each lies over the other.
+  const stack = year === 1931 ? [1939, 1931] : year === 1939 ? [1931, 1939] : [year];
+  for (const y of stack) {
+    const id = `aerial-${y}`;
+    if (!map.getLayer(id)) {
+      const service = AERIALS.find((a) => a[0] === y)[1];
+      map.addSource(id, { type: "raster", tileSize: 256, maxzoom: 19, attribution: "Aerial photographs: City of Toronto",
+        tiles: [`https://gis.toronto.ca/arcgis/rest/services/basemap/cot_${service}/MapServer/tile/{z}/{y}/{x}`] });
+      map.addLayer({ id, type: "raster", source: id, paint: { "raster-fade-duration": 0 } }, "street-labels");
+    }
+    map.setLayoutProperty(id, "visibility", "visible");
+    // over the streets and the other photographs, under the names
+    map.moveLayer(id, "street-labels");
+  }
+}
+
 // Archive photographs taken around the year on the slider, as camera pins (the Photos button).
 // A pin stands for every picture within about its own width, so there are fewer from further
 // away. Pins show through buildings: many pictures are placed at the middle of a building.
@@ -800,7 +839,9 @@ function render() {
   showWeather();
   const shore = updateWater(state.year);
   updateMap(state.year);
-  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(lost ? lostLayers() : []), ...buildingLayers(), ...(roofs ? roofLayers() : []), ...landmarkLayers(), ...(trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(photosOn() ? [photoLayer()] : []), ...(transitOn() ? [transitLayer()] : [])] });
+  updateAerial();
+  const model = aerial.shown === null;
+  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(model && lost ? lostLayers() : []), ...(model ? buildingLayers() : []), ...(model && roofs ? roofLayers() : []), ...(model ? landmarkLayers() : []), ...(model && trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(photosOn() ? [photoLayer()] : []), ...(transitOn() ? [transitLayer()] : [])] });
   runTransit();
   watchBikes(bikesOn(), render);
   treesOn = treeSets();
@@ -812,8 +853,10 @@ function render() {
   $("population-value").textContent = populationAt(state.year);
   $("standing").textContent = `${countStanding(y).toLocaleString("en-CA")} of today's buildings standing`;
   const note = $("shoreline-note");
-  note.hidden = !shore;
-  if (shore) note.textContent = `Historic shoreline of Lake Ontario (${shore})`;
+  note.hidden = !shore && model;
+  note.classList.toggle("photo", !model);
+  if (!model) note.textContent = `Aerial photograph of ${aerial.shown}, City of Toronto`;
+  else if (shore) note.textContent = `Historic shoreline of Lake Ontario (${shore})`;
   if (document.activeElement !== $("slider") || state.playing) $("slider").value = String(state.year);
 }
 
@@ -888,6 +931,11 @@ function setupControls() {
   slider.addEventListener("input", () => { pauseStory(); state.year = Number(slider.value); cardFollowsYear(); render(); });
   $("play").addEventListener("click", () => setPlaying(!state.playing));
   $("speed").addEventListener("change", (e) => { state.speed = Number(e.target.value); });
+  $("aerial").addEventListener("click", () => {
+    aerial.on = !aerial.on;
+    $("aerial").setAttribute("aria-pressed", String(aerial.on));
+    render();
+  });
   $("photos").addEventListener("click", () => {
     photosShow.on = !photosShow.on;
     $("photos").setAttribute("aria-pressed", String(photosShow.on));
