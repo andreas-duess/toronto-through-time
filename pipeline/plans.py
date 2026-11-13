@@ -57,7 +57,8 @@ UTM = 26917
 EARTH = 20037508.342789244
 
 VIVID = 30        # a building's colour: brightest channel less weakest, on average, at least
-BRIGHT = 180      # ... and its brightest channel, on average, at least
+BRIGHT = 150      # ... and its brightest channel, on average, at least (brown-tinted brick is about 180)
+COLOURED = 28     # how much more coloured than the paper a building is (0-255)
 STRONGER = 26     # how far below the paper a building's weakest colour channel lies (0-255)
 INK = 115         # brightest channel darker than this is an ink line
 MIN_M2, MAX_M2 = 18, 30000
@@ -101,7 +102,17 @@ def read_buildings(rgb):
     ink = brightest < INK
     # buildings are pink, red, yellow or orange; green and blue-green are water tints
     warm = rgb[..., 0] - rgb[..., 1] > 3
-    coloured = (weakest < paper - STRONGER) & ~ink & warm
+    # ... and clearly more coloured than the paper, measured as red less blue or, for the pale
+    # pink of brick on some plates, red less green. Stained paper, and
+    # paper beside a paler pasted-on correction slip, is darker than the palest ground nearby but
+    # no more coloured than paper elsewhere on the sheet. The paper's colour is what most of the
+    # sheet has: the lower range of this stretch of it, or of the ground within about 100 m.
+    chroma = np.maximum(rgb[..., 0] - rgb[..., 2], (1.6 * (rgb[..., 0] - rgb[..., 1])).astype(np.int16))
+    printed = brightest[::8, ::8] > 12
+    sheet = np.percentile(chroma[::8, ::8][printed], 40) - 5 if printed.any() else 0
+    near = ndimage.zoom(ndimage.percentile_filter(chroma[::8, ::8], 20, size=31), 8, order=1)[:weakest.shape[0], :weakest.shape[1]]
+    # (in a block built over from end to end the lower range is buildings too: no more than a little above the sheet's)
+    coloured = (weakest < paper - STRONGER) & ~ink & warm & (chroma > np.clip(near, sheet, sheet + 12) + COLOURED)
     coloured = ndimage.binary_opening(coloured, iterations=2)  # drops red street lines and specks
     # lettering on a building leaves holes; close small ones without bridging the ink lines
     filled = ndimage.binary_closing(coloured | (ink & ndimage.binary_dilation(coloured, iterations=3)), iterations=1)

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>How Toronto Through Time was made: the data and the method</title>
+<meta name="description" content="How a 3D map of Toronto's history from 1793 to today was built: where the building years come from, how old fire insurance maps were read by computer, and how accurate it is." />
+<link rel="canonical" href="https://torontothroughtime.com/methodology" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://torontothroughtime.com/methodology" />
+<meta property="og:title" content="How Toronto Through Time was made" />
+<meta property="og:description" content="Where the building years come from, how old maps were read by computer, and how accurate the map is." />
+<meta property="og:image" content="https://torontothroughtime.com/card.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "How Toronto Through Time was made", "description": "How a 3D map of Toronto's history from 1793 to today was built: where the building years come from, how old fire insurance maps were read by computer, and how accurate the result is.", "datePublished": "2026-11-12", "dateModified": "2026-11-12", "author": {"@type": "Person", "name": "Andreas Duess", "url": "https://duess.com/"}, "mainEntityOfPage": "https://torontothroughtime.com/methodology", "image": "https://torontothroughtime.com/card.png", "about": {"@type": "City", "name": "Toronto", "sameAs": "https://www.wikidata.org/wiki/Q172"}}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "What is Toronto Through Time?", "acceptedAnswer": {"@type": "Answer", "text": "Toronto Through Time is a free 3D map that shows how the old City of Toronto grew from 1793 to today. You move a slider through the years and watch buildings, streets, railways and the lake shore appear when they were built. It also shows buildings that are gone, old photographs, air photos, and today's buses, streetcars and weather."}}, {"@type": "Question", "name": "How do you know when each building was built?", "acceptedAnswer": {"@type": "Answer", "text": "For about one building in seven, a record gives the year: the city's heritage list, a building permit, the city's apartment records, or an article about a well-known building. For the rest there is no record, so the year is a best guess. The guess comes from old fire insurance maps, from the age of the area in the census, and from dated buildings nearby."}}, {"@type": "Question", "name": "How were the old maps read?", "acceptedAnswer": {"@type": "Answer", "text": "A computer program looks at scans of fire insurance maps from 1880, 1889, 1903, 1913 and 1924. On those maps brick buildings are coloured pink or red and wooden ones yellow. The program finds the coloured shapes and turns each one into a building outline. A building that is on one map and missing from the next was torn down between those two years."}}, {"@type": "Question", "name": "Where do the buildings that are gone come from?", "acceptedAnswer": {"@type": "Answer", "text": "They come from the same fire insurance maps. If a map shows a building where nothing from that time stands today, it is drawn as a lost building. Its shape and whether it was brick or wood come from the map. Its height is a guess: about two storeys for wood and three for brick."}}, {"@type": "Question", "name": "How accurate is the map?", "acceptedAnswer": {"@type": "Answer", "text": "It is a careful model, not a survey. Shapes of today's buildings come from the City of Toronto's own 3D data and are good. Years on record are good. Guessed years can be off by ten years or more. The map reading makes mistakes: it can miss a building, join a row of houses into one block, or take a stain on the paper for a building."}}, {"@type": "Question", "name": "Where does the old lake shore come from?", "acceptedAnswer": {"@type": "Answer", "text": "The shore is traced from maps made in 1834, 1851, 1857, 1872, 1878, 1891, 1894, 1909, 1918 and 1931. Much of today's waterfront is land that was filled in, so the lake reaches further north in the early years."}}, {"@type": "Question", "name": "Who made it?", "acceptedAnswer": {"@type": "Answer", "text": "Andreas Duess made the map in November 2026, working with Claude, an AI model made by Anthropic, which wrote the code. All the data comes from public sources, listed on the sources page."}}]}</script>
+<style>
+  body { font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #1d2733; max-width: 720px; margin: 40px auto; padding: 0 16px 60px; }
+  h1 { font: 500 34px/1.2 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; margin-bottom: 6px; }
+  h2 { font: 500 23px/1.3 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; margin-top: 40px; }
+  .lede { font-size: 19px; } .meta { color: #5d6b7a; font-size: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; } td, th { text-align: left; padding: 7px 12px 7px 0; border-bottom: 1px solid #e3e7ea; vertical-align: top; }
+  a { color: #b8431f; } nav { font-size: 14px; margin-bottom: 28px; } nav a { margin-right: 16px; }
+  .facts { background: #f4f1ea; border-radius: 8px; padding: 14px 18px; } .facts ul { margin: 6px 0 0; padding-left: 20px; }
+</style>
+</head>
+<body>
+<nav><a href="./">← The map</a><a href="./sources.html">Sources</a></nav>
+<article>
+<h1>How Toronto Through Time was made</h1>
+<p class="meta">By <a href="https://duess.com/" rel="author">Andreas Duess</a>. Published November 12, 2026. Page updated November 12, 2026.</p>
+<p class="lede">Toronto Through Time is a 3D map of the old City of Toronto that you can move through time, from 1793 to today. This page explains in plain words where the map's information comes from, how it was put together, and how far you can trust it.</p>
+<div class="facts">
+<b>Key facts, as of November 2026</b>
+<ul>
+<li>The map covers the old City of Toronto, the part that was the city before 1998.</li>
+<li>It shows more than 100,000 buildings that stand today, each from the year it was built.</li>
+<li>About one building in seven has a year from a record. The rest are best guesses.</li>
+<li>Buildings that are gone were read by computer from fire insurance maps of 1880 to 1924.</li>
+<li>It includes about 26,000 old photographs from the City of Toronto Archives.</li>
+<li>All of the data is public. Most of it is the City of Toronto's own open data.</li>
+</ul>
+</div>
+<h2>What is Toronto Through Time?</h2>
+<p>Toronto Through Time is a free 3D map that shows how the old City of Toronto grew from 1793 to today. You move a slider through the years and watch buildings, streets, railways and the lake shore appear when they were built. It also shows buildings that are gone, old photographs, air photos, and today's buses, streetcars and weather.</p>
+<p><a href="./">Open the map</a> and press <b>Play the story</b> for a 12-minute tour read aloud.</p>
+<h2>How do you know when each building was built?</h2>
+<p>For about one building in seven, a record gives the year: the city's heritage list, a building permit, the city's apartment records, or an article about a well-known building. For the rest there is no record, so the year is a best guess. The guess comes from old fire insurance maps, from the age of the area in the census, and from dated buildings nearby.</p>
+<table>
+<tr><th>Where the year comes from</th><th>How good it is</th></tr>
+<tr><td>An article about a well-known building (Wikidata, plus a short list checked by hand)</td><td>Good</td></tr>
+<tr><td>The City of Toronto's Heritage Register</td><td>Good. When the register gives a range, such as 1903 to 1910, the last year is used.</td></tr>
+<tr><td>The city's apartment records (RentSafeTO)</td><td>Good</td></tr>
+<tr><td>Building permits for new buildings, from 2000 on</td><td>Good</td></tr>
+<tr><td>The first year a building shows up in the city's yearly 3D model, from 2016 on</td><td>Good to within a year or two</td></tr>
+<tr><td>A best guess, from old maps, the census and the buildings nearby</td><td>Can be off by ten years or more</td></tr>
+</table>
+<p>On the map, turn on <b>Data quality</b> to colour every building by where its year comes from. Click any building to see the same thing in words.</p>
+<h2>How were the old maps read?</h2>
+<p>A computer program looks at scans of fire insurance maps from 1880, 1889, 1903, 1913 and 1924. On those maps brick buildings are coloured pink or red and wooden ones yellow. The program finds the coloured shapes and turns each one into a building outline. A building that is on one map and missing from the next was torn down between those two years.</p>
+<p>The steps, in order:</p>
+<ol>
+<li><b>Get the scans.</b> The maps are Goad's fire insurance plans of Toronto. Libraries and archives scanned them and lined them up with today's map.</li>
+<li><b>Find the colour.</b> A building has to be clearly more coloured than the paper around it: pink, red, orange or yellow. Paper that is only stained or darker does not count.</li>
+<li><b>Cut along the ink.</b> The black lines on the map split a coloured area into single buildings.</li>
+<li><b>Throw out what is not a building.</b> Shapes in the lake, tiny shapes standing alone, and long thin lines are dropped.</li>
+<li><b>Line up with the streets.</b> Each map sits a few metres off. The outlines are moved so they stay out of the roads.</li>
+<li><b>Compare the years.</b> Each outline is checked against the map before it, the map after it, and the buildings that stand today.</li>
+</ol>
+<p>This part of the map is still being improved. As of November 2026 the maps have been read for the centre of the city and Parkdale, and the rest of the old city is in progress.</p>
+<h2>Where do the buildings that are gone come from?</h2>
+<p>They come from the same fire insurance maps. If a map shows a building where nothing from that time stands today, it is drawn as a lost building. Its shape and whether it was brick or wood come from the map. Its height is a guess: about two storeys for wood and three for brick.</p>
+<p>About 85 lost buildings have names, such as Maple Leaf Stadium and the Sunnyside Amusement Park. The names come from Wikipedia articles about buildings that were torn down. Most lost buildings never had an article, so most have no name.</p>
+<h2>How accurate is the map?</h2>
+<p>It is a careful model, not a survey. Shapes of today's buildings come from the City of Toronto's own 3D data and are good. Years on record are good. Guessed years can be off by ten years or more. The map reading makes mistakes: it can miss a building, join a row of houses into one block, or take a stain on the paper for a building.</p>
+<p>Some things on the map are drawn to look right and are not data:</p>
+<ul>
+<li>The windows on the buildings.</li>
+<li>The sloped roofs on houses. The height is real; the shape of the roof is drawn.</li>
+<li>The single trees. Where trees grow is real, from a city study of 2018. The trees themselves are drawn to fill those areas.</li>
+<li>Church towers on some churches, where the data gave a height and no shape.</li>
+</ul>
+<p>If you see something wrong, <a href="https://x.com/AndreasDuess">tell Andreas</a>.</p>
+<h2>Where does the old lake shore come from?</h2>
+<p>The shore is traced from maps made in 1834, 1851, 1857, 1872, 1878, 1891, 1894, 1909, 1918 and 1931. Much of today's waterfront is land that was filled in, so the lake reaches further north in the early years.</p>
+<p>Streets appear in the year they were laid out, where that is known. The forest that covered the land in 1793 shrinks as streets are built.</p>
+<h2>Who made it?</h2>
+<p>Andreas Duess made the map in November 2026, working with Claude, an AI model made by Anthropic, which wrote the code. All the data comes from public sources, listed on the sources page.</p>
+<p>The full list of sources, with links, is on the <a href="./sources.html">sources page</a>.</p>
+</article>
+</body>
+</html>

@@ -154,13 +154,13 @@ html, body {
 }
 #loading.done { display: none; }
 
-#sources-link, #comments-link { font-size: 12px; color: var(--muted); }
+#sources-link, #comments-link, #method-link { font-size: 12px; color: var(--muted); white-space: nowrap; }
 
 @media (max-width: 640px) {
   #year-label { font-size: 56px; left: 16px; }
   #population-value { font-size: 20px; }
   #story-text { font-size: 14px; }
-  #sources-link { display: none; }
+  #sources-link, #method-link { display: none; }
   #panel { width: min(280px, calc(100vw - 32px)); }
   #story { left: 16px; top: 64px; }
   #comments-link { white-space: nowrap; }

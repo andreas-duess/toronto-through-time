@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Toronto Through Time</title>
-    <meta name="description" content="Watch Toronto grow from 1793 to today on a 3D map: every building in the old city by its year, the moving shoreline, the railways, the forest and the buildings that are gone." />
+    <title>Toronto Through Time: a 3D map of Toronto's history, 1793 to today</title>
+    <meta name="description" content="Watch Toronto grow from 1793 to today on a free 3D map: every building by its year, lost buildings, the old lake shore, archive photos and a narrated history." />
     <link rel="canonical" href="https://torontothroughtime.com/" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://torontothroughtime.com/" />
@@ -13,10 +13,16 @@
     <meta property="og:image" content="https://torontothroughtime.com/card.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:creator" content="@AndreasDuess" />
+    <script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebApplication", "name": "Toronto Through Time", "url": "https://torontothroughtime.com/", "description": "A free 3D map that shows how the old City of Toronto grew from 1793 to today, with lost buildings, old photographs, air photos and a narrated story.", "applicationCategory": "EducationalApplication", "operatingSystem": "Any", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "CAD"}, "author": {"@type": "Person", "name": "Andreas Duess", "url": "https://duess.com/"}, "image": "https://torontothroughtime.com/card.png", "about": {"@type": "City", "name": "Toronto", "sameAs": "https://www.wikidata.org/wiki/Q172"}, "temporalCoverage": "1793/2026"}</script>
     <link rel="stylesheet" href="./src/style.css" />
   </head>
   <body>
     <div id="map"></div>
+    <noscript>
+      <h1>Toronto Through Time</h1>
+      <p>Toronto Through Time is a free 3D map that shows how the old City of Toronto grew from 1793 to today. Move a slider through the years and watch buildings, streets, railways and the lake shore appear when they were built. It also shows buildings that are gone, old photographs, air photos and a history of the city read aloud. The map needs JavaScript to run.</p>
+      <p><a href="./methodology">How the map was made</a> · <a href="./sources.html">Sources</a></p>
+    </noscript>
     <canvas id="falling" hidden></canvas>
 
     <div id="population">
@@ -127,6 +133,7 @@
         <option value="12">12 yr/s</option>
         <option value="25">25 yr/s</option>
       </select>
+      <a id="method-link" href="./methodology" target="_blank" rel="noopener">how it was made</a>
       <a id="sources-link" href="./sources.html" target="_blank" rel="noopener">sources</a>
       <a id="comments-link" href="https://x.com/AndreasDuess" target="_blank" rel="noopener" title="An early version. Tell Andreas what is wrong or missing.">comments?</a>
     </footer>
