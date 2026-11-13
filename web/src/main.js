@@ -194,16 +194,18 @@ function transitLayer() {
     pickable: true,
   });
 }
-// While they show, the map is drawn again about 20 times a second to move them.
+// While they show, the whole map is drawn again to move them: as often as it takes a vehicle at
+// 40 km/h to move two pixels, between 2 and 10 times a second. From far away that is seldom.
 let transitFrame = 0;
 function runTransit() {
-  watchTransit(transitOn());
+  watchTransit(transitOn(), DATA + "tracks.json");
   if (!transitOn() || transitFrame) return;
   let last = 0;
   const tick = (now) => {
     if (!transitOn()) { transitFrame = 0; return watchTransit(false); }
+    const pixelsPerSecond = (11 * 2 ** map.getZoom()) / 56600;
     // render() comes back here through runTransit(): transitFrame stays set so that it starts no second loop
-    if (now - last > 50 && !state.playing) { last = now; render(); }
+    if (now - last > 1000 / Math.min(10, Math.max(2, pixelsPerSecond / 2)) && !state.playing) { last = now; render(); }
     transitFrame = requestAnimationFrame(tick);
   };
   transitFrame = requestAnimationFrame(tick);

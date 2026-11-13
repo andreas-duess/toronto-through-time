@@ -61,6 +61,8 @@ OVERPASS = {
     "osm/worship.json": f'[out:json][timeout:150];(way[amenity=place_of_worship]{BOX};relation[amenity=place_of_worship]{BOX};'
                         f'way[building~"^(church|cathedral|chapel|synagogue|mosque|temple)$"]{BOX};);out tags geom;',
     "osm/parts.json": f'[out:json][timeout:150];way["building:part"][height]{BOX};out tags geom;',
+    # streetcar tracks, which the live streetcars are kept on (pipeline/tracks.py)
+    "osm/tram.json": f'[out:json][timeout:90];way[railway=tram]{BOX};out geom;',
     # railway lines and the outline of Fort York
     "osm/rail_fort.json": '[out:json][timeout:90];(way[railway~"^(rail|abandoned|disused|razed)$"]'
                           f'{BOX};way(1416813033););out tags geom;',
