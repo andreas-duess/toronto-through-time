@@ -22,7 +22,7 @@ if __name__ == "__main__":
     AUDIO.mkdir(parents=True, exist_ok=True)
     files, made = [], 0
     for stop in csv.DictReader((ROOT / "data" / "manual" / "story.csv").open()):
-        said = f"{stop['title']}. {stop['text']}"
+        said = stop["text"]      # the headline is on the card; the voice reads the text only
         name = hashlib.sha1(f"{VOICE}|{MODEL}|{said}".encode()).hexdigest()[:12] + ".mp3"
         files.append(name)
         if (AUDIO / name).exists():

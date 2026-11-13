@@ -759,6 +759,8 @@ def write_tables():
         with open(MANUAL / f"{name}.csv") as f:
             rows = list(csv.DictReader(f))
         (OUT / f"{name}.json").write_text(json.dumps(rows))
+    # battles and fires drawn on the map in their years (hand-made)
+    (OUT / "events.json").write_text(json.dumps(json.loads((MANUAL / "events.geojson").read_text())))
 
 
 if __name__ == "__main__":

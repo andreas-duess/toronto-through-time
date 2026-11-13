@@ -37,6 +37,7 @@ import rasterio.features
 
 import water
 import shapely
+import shapely.affinity
 from affine import Affine
 from scipy.signal import fftconvolve
 from scipy.spatial import cKDTree
@@ -178,6 +179,58 @@ def explode(geoms, *columns):
     parts, index = shapely.get_parts(geoms, return_index=True)
     ok = ~shapely.is_empty(parts) & (shapely.get_type_id(parts) == 3)
     return (parts[ok], *(np.asarray(c)[index[ok]] for c in columns))
+
+
+STRIP_M = 4.0     # an outline is squared up in strips this wide
+STEP_M = 1.5      # walls are placed on steps of this size
+THIN_M = 3.0      # nothing narrower than this is kept
+
+
+def square_up(geom):
+    """An outline redrawn with right angles, as a list of polygons (the pieces it falls into).
+
+    One that nearly fills the rectangle around it becomes that rectangle. Any other is turned to
+    the direction most of its walls run in, cut into strips across, and each strip replaced by a
+    rectangle from its lowest to its highest point: a row of houses with rear wings comes out as
+    steps. Necks narrower than THIN_M go, which also parts buildings the reading had joined by
+    a thread.
+    """
+    rect = shapely.minimum_rotated_rectangle(geom)
+    if geom.area >= 0.8 * rect.area:
+        return [rect]
+    # the direction of the walls: the edges' directions, folded into a quarter turn, by length
+    xy = shapely.get_coordinates(shapely.simplify(geom, 1.0).exterior)
+    d = np.diff(xy, axis=0)
+    length = np.hypot(*d.T)
+    quarter = np.arctan2(d[:, 1], d[:, 0]) % (np.pi / 2)
+    turn = np.arctan2((length * np.sin(4 * quarter)).sum(), (length * np.cos(4 * quarter)).sum()) / 4
+    centre = geom.centroid
+    g = shapely.affinity.rotate(geom, -turn, origin=centre, use_radians=True)
+    x0, y0, x1, y1 = g.bounds
+    # strips along the longer side
+    along_x = (x1 - x0) >= (y1 - y0)
+    lo, hi = (x0, x1) if along_x else (y0, y1)
+    count = max(1, int(round((hi - lo) / STRIP_M)))
+    edges = np.linspace(lo, hi, count + 1)
+    boxes = []
+    for a, b in zip(edges[:-1], edges[1:]):
+        strip = shapely.clip_by_rect(g, a, y0 - 1, b, y1 + 1) if along_x else shapely.clip_by_rect(g, x0 - 1, a, x1 + 1, b)
+        for part in shapely.get_parts(strip):
+            if part.geom_type != "Polygon" or part.area < 0.5 * THIN_M * (b - a):
+                continue
+            px0, py0, px1, py1 = part.bounds
+            if along_x:
+                boxes.append(shapely.box(a, np.round(py0 / STEP_M) * STEP_M, b, np.round(py1 / STEP_M) * STEP_M))
+            else:
+                boxes.append(shapely.box(np.round(px0 / STEP_M) * STEP_M, a, np.round(px1 / STEP_M) * STEP_M, b))
+    if not boxes:
+        return [rect]
+    out = shapely.union_all(boxes).buffer(-THIN_M / 2, join_style="mitre").buffer(THIN_M / 2, join_style="mitre")
+    out = shapely.affinity.rotate(out, turn, origin=centre, use_radians=True)
+    parts = [p for p in shapely.get_parts(out) if p.geom_type == "Polygon" and p.area >= 18]
+    # a piece that nearly fills its own rectangle is that rectangle
+    parts = [shapely.minimum_rotated_rectangle(p) if p.area >= 0.85 * shapely.minimum_rotated_rectangle(p).area else shapely.Polygon(p.exterior) for p in parts]
+    return parts or [rect]
 
 
 def street_years(geoms):
@@ -443,11 +496,37 @@ if __name__ == "__main__":
     log(f"lost outlines: {n:,}; end estimated from neighbours {unknown.sum():,}")
 
     lost = lost.sort_values("built", kind="stable").reset_index(drop=True)
-    # An outline that nearly fills the rectangle around it is drawn as that rectangle: the reading
-    # of the scans leaves ragged edges that the buildings did not have.
-    rect = shapely.minimum_rotated_rectangle(lost.geometry.values)
-    boxy = shapely.area(lost.geometry.values) >= 0.8 * shapely.area(rect)
-    geom = np.where(boxy, rect, shapely.simplify(lost.geometry.values, 0.8))
+    # No building stands in a street. What lies on a street that was there when the building went
+    # up (or within ten years of it) is cut away; an outline that loses a quarter of itself that
+    # way was never a building (lettering or a stain on the plan) and goes altogether.
+    lanes = gpd.read_file(OUT / "streets.json").to_crs(UTM)
+    lanes = lanes[lanes.kind > 0].reset_index(drop=True)
+    paving = shapely.buffer(lanes.geometry.values, np.where(lanes.kind >= 3, 8, 6), cap_style="flat")
+    oi, si = shapely.STRtree(paving).query(lost.geometry.values, predicate="intersects")
+    there = lanes.y.values[si] <= lost.built.values[oi] + 10
+    oi, si = oi[there], si[there]
+    geoms, gone_now = lost.geometry.values.copy(), np.zeros(n, bool)
+    for i in np.unique(oi):
+        cut = shapely.difference(geoms[i], shapely.union_all(paving[si[oi == i]]))
+        if cut.area < 0.75 * geoms[i].area:
+            gone_now[i] = True
+            continue
+        parts = [part for part in shapely.get_parts(cut) if part.geom_type == "Polygon"]
+        geoms[i] = max(parts, key=lambda part: part.area) if parts else geoms[i]
+    lost["geometry"] = geoms
+    lost = lost[~gone_now].reset_index(drop=True)
+    n = len(lost)
+    log(f"in a street: {gone_now.sum():,} outlines dropped, {len(np.unique(oi)) - gone_now.sum():,} trimmed")
+
+    # Buildings have straight walls and square corners; the reading of the scans gives ragged
+    # edges. Every outline is redrawn with right angles (square_up).
+    squared = [square_up(g) for g in lost.geometry.values]
+    rows = np.repeat(np.arange(n), [len(parts) for parts in squared])
+    lost = lost.iloc[rows].reset_index(drop=True)
+    lost["geometry"] = gpd.GeoSeries([part for parts in squared for part in parts], crs=UTM).values
+    n = len(lost)
+    log(f"squared up: {n:,} outlines")
+    geom = lost.geometry.values
     geom = gpd.GeoSeries(geom, crs=UTM).to_crs(4326).values
     rings = shapely.get_exterior_ring(shapely.orient_polygons(geom))
     coords, ring_of = shapely.get_coordinates(rings, return_index=True)
