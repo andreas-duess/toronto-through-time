@@ -181,7 +181,9 @@ const TRANSIT_ZOOM = 12.5;
 const TRUE_SIZE_ZOOM = 16;
 const STREETCAR = { size: [30, 2.5, 3.4], color: [200, 32, 38] };
 const BUS = { size: [12, 2.5, 3], color: [58, 74, 96] };
-const transitOn = () => Boolean(meta) && state.year >= meta.lastYear - 0.05 && map.getZoom() >= TRANSIT_ZOOM && !document.hidden;
+// the switches of the two live layers in the panel
+const live = { transit: true, bikes: true };
+const transitOn = () => live.transit && Boolean(meta) && state.year >= meta.lastYear - 0.05 && map.getZoom() >= TRANSIT_ZOOM && !document.hidden;
 function transitLayer() {
   const larger = Math.max(1, 2 ** (TRUE_SIZE_ZOOM - map.getZoom()) * 0.75);
   return new SimpleMeshLayer({
@@ -221,7 +223,7 @@ document.addEventListener("visibilitychange", () => { if (meta) runTransit(); })
 // smaller from further away.
 const BIKE_ZOOM = 13;
 const today_ = () => Boolean(meta) && state.year >= meta.lastYear - 0.05;
-const bikesOn = () => today_() && map.getZoom() >= BIKE_ZOOM;
+const bikesOn = () => live.bikes && today_() && map.getZoom() >= BIKE_ZOOM;
 const BIKE_ICON = (() => {
   const c = document.createElement("canvas");
   c.width = c.height = 96;
@@ -270,10 +272,11 @@ const aerial = { on: false, shown: null };
 function updateAerial() {
   $("aerial").disabled = state.year < AERIALS[0][0];
   if (!map.getLayer("street-labels")) return;
-  let year = null;
-  if (aerial.on && state.year >= AERIALS[0][0]) {
-    for (const [y] of AERIALS) if (year === null || Math.abs(y - state.year) < Math.abs(year - state.year)) year = y;
-  }
+  let year = null, nearest = null;
+  for (const [y] of AERIALS) if (nearest === null || Math.abs(y - state.year) < Math.abs(nearest - state.year)) nearest = y;
+  if (aerial.on && state.year >= AERIALS[0][0]) year = nearest;
+  $("aerial-desc").textContent = state.year < AERIALS[0][0] ? `The real city from the air, from ${AERIALS[0][0]} on`
+    : year ? `Showing the survey of ${year}` : `The real city from the air: the survey of ${nearest}`;
   if (year === aerial.shown) return;
   aerial.shown = year;
   for (const [y] of AERIALS) if (map.getLayer(`aerial-${y}`)) map.setLayoutProperty(`aerial-${y}`, "visibility", "none");
@@ -849,6 +852,7 @@ function render() {
   drawn = drawnKey();
   writeHash();
 
+  $("panel").classList.toggle("past", !today_());
   $("year-label").textContent = String(y);
   $("population-value").textContent = populationAt(state.year);
   $("standing").textContent = `${countStanding(y).toLocaleString("en-CA")} of today's buildings standing`;
@@ -922,8 +926,36 @@ function setupSun() {
   $("sun").hidden = false;
 }
 
+// The panel of layers: it folds away, each "i" opens a longer note, and the live layers have switches.
+function setupPanel() {
+  const head = $("panel-head"), body = $("panel-body");
+  const fold = (open) => { head.setAttribute("aria-expanded", String(open)); body.hidden = !open; };
+  let open = !window.matchMedia?.("(max-width: 640px)").matches;
+  try { open = (localStorage.getItem("panel") ?? String(open)) === "true"; } catch { /* private window */ }
+  fold(open);
+  head.addEventListener("click", () => {
+    fold(body.hidden);
+    try { localStorage.setItem("panel", String(!body.hidden)); } catch { /* private window */ }
+  });
+  for (const about of document.querySelectorAll("#panel .about")) {
+    about.addEventListener("click", () => {
+      const more = about.closest(".layer").querySelector(".more");
+      more.hidden = !more.hidden;
+      about.setAttribute("aria-expanded", String(!more.hidden));
+    });
+  }
+  for (const key of ["transit", "bikes"]) {
+    $(key).addEventListener("click", () => {
+      live[key] = !live[key];
+      $(key).setAttribute("aria-pressed", String(live[key]));
+      render();
+    });
+  }
+}
+
 function setupControls() {
   setupSun();
+  setupPanel();
   const slider = $("slider");
   slider.min = String(meta.firstYear);
   slider.max = String(meta.lastYear);
