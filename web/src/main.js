@@ -69,6 +69,8 @@ const state = { year: 1793, playing: false, speed: 6, quality: false };
 const story = { index: -1, playing: false, run: 0, voice: true, narration: null, files: [], sound: null, left: null };
 // A few stops have a sound under the voice (a battle, a fire, hooves): quiet, in a loop, fading in and out.
 const SOUND_LEVEL = 0.16;
+// some louder, some softer
+const SOUND_LEVELS = { fire: 0.22, storm: 0.13 };
 function fadeSound(sound, to, ms, then) {
   const from = sound.volume, start = performance.now();
   const step = (now) => {
@@ -103,7 +105,7 @@ function narrate(i) {
     under.loop = true;
     under.volume = 0;
     story.sound = under;
-    under.play().then(() => fadeSound(under, SOUND_LEVEL, 1500)).catch(() => { if (story.sound === under) story.sound = null; });
+    under.play().then(() => fadeSound(under, SOUND_LEVELS[stops[i].sound] ?? SOUND_LEVEL, 1500)).catch(() => { if (story.sound === under) story.sound = null; });
     // it fades out as the voice ends
     sound.addEventListener("ended", () => { if (story.sound === under) { story.sound = null; fadeSound(under, 0, 1800, () => under.pause()); } });
   }
