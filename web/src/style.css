@@ -85,7 +85,7 @@ html, body {
 #sun[hidden] { display: none; }
 #weather-now { margin: 0 0 6px 28px; font-size: 12px; color: var(--muted); }
 #weather-now[hidden] { display: none; }
-.layer { padding: 11px 0; border-top: 1px solid var(--line); }
+.layer { padding: 9px 0; border-top: 1px solid var(--line); }
 .layer-top { display: flex; align-items: center; gap: 8px; }
 .layer .name { flex: 1; font-size: 14px; font-weight: 500; }
 .layer .desc, .layer .more { margin: 2px 0 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
