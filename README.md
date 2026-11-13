@@ -101,5 +101,5 @@ old Trinity College), `island.csv` (the research behind the Island rows). `place
 
 ## Online
 
-Live at https://toronto.duess.com, a static site on Cloudflare Workers (`web/wrangler.jsonc`).
+Live at https://torontothroughtime.com (and still at https://toronto.duess.com), a static site on Cloudflare Workers (`web/wrangler.jsonc`).
 To publish the current state: `cd web && npm run deploy` (builds, then uploads `web/dist`).

@@ -5,5 +5,10 @@
   // static files are served without running the Worker; only these paths go through it
   "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": ["/photos/*"] },
   "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "toronto-through-time-photos" }],
-  "routes": [{ "pattern": "toronto.duess.com", "custom_domain": true }]
+  // the main address, its www form, and the first address the site had
+  "routes": [
+    { "pattern": "torontothroughtime.com", "custom_domain": true },
+    { "pattern": "www.torontothroughtime.com", "custom_domain": true },
+    { "pattern": "toronto.duess.com", "custom_domain": true }
+  ]
 }
