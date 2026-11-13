@@ -70,7 +70,9 @@ const story = { index: -1, playing: false, run: 0, voice: true, narration: null,
 // A few stops have a sound under the voice (a battle, a fire, hooves): quiet, in a loop, fading in and out.
 const SOUND_LEVEL = 0.16;
 // some louder, some softer
-const SOUND_LEVELS = { fire: 0.34, storm: 0.13, lastpost: 0.3, cheer: 0.09 };
+const SOUND_LEVELS = { fire: 0.34, storm: 0.13, lastpost: 0.3, cheer: 0.09, toast: 0.11,
+  // one stop apart from the others that share its sound: "<sound>@<year of the stop>"
+  "cheer@1867": 0.072 };
 // heard for this many seconds only, then faded out
 const SOUND_SECONDS = { building: 9 };
 // started only when the voice is this far through the stop (0 to 1)
@@ -115,7 +117,7 @@ function narrate(i) {
       if (story.sound !== under || !under.paused) return;
       const seconds = SOUND_SECONDS[stops[i].sound];
       if (seconds) setTimeout(() => { if (story.sound === under) { story.sound = null; fadeSound(under, 0, 2500, () => under.pause()); } }, seconds * 1000);
-      under.play().then(() => fadeSound(under, SOUND_LEVELS[stops[i].sound] ?? SOUND_LEVEL, 1500)).catch(() => { if (story.sound === under) story.sound = null; });
+      under.play().then(() => fadeSound(under, SOUND_LEVELS[`${stops[i].sound}@${stops[i].year}`] ?? SOUND_LEVELS[stops[i].sound] ?? SOUND_LEVEL, 1500)).catch(() => { if (story.sound === under) story.sound = null; });
     };
     const from = SOUND_FROM[stops[i].sound];
     if (!from) begin();
