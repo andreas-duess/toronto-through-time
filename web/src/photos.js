@@ -29,7 +29,7 @@ export function photoPins(year, cell) {
 
 export function photo(i) {
   const [, , year, about, file, title, citation] = photos[i];
-  return { year: `${about ? "about " : ""}${year}`, title, citation, image: `${base}images/${file}.jpg`, thumb: `${base}thumbnails/${file}.jpg` };
+  return { year: `${about ? "about " : ""}${year}`, title, citation, image: `${base}${file}.jpg` };
 }
 
 // a round pin with a camera on it, as a picture for the icon layer

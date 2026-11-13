@@ -4,10 +4,11 @@ From OldTO (Sidewalk Labs, 2018, Apache 2.0; github.com/sidewalklabs/oldto, data
 saved as data/raw/oldto/images.geojson), which placed the City of Toronto Archives' digitized
 photographs on the map from their titles: by landmark, address or street corner. Kept here: the
 photographs inside the old city that the Archives' record marks "OPEN - No restrictions", with a
-year. The picture files are still served from OldTO's own storage (BASE); the Archives' record
-links in the data no longer work, so the citation (fonds and item) is the credit.
+year. The picture files were copied once from OldTO's storage (BASE) into the site's own R2
+bucket, toronto-through-time-photos, which web/worker.js serves at /photos/<file>.jpg. The
+Archives' record links in the data no longer work, so the citation (fonds and item) is the credit.
 
-Writes {base, photos: [[lon, lat, year, about (1 if "ca."), file, title, citation], ...]} in
+Writes {base (where the page finds the pictures), photos: [[lon, lat, year, about (1 if "ca."), file, title, citation], ...]} in
 order of year.
 
 Run: uv run pipeline/photos.py
@@ -43,5 +44,5 @@ if __name__ == "__main__":
     rows = [r for r in rows if 1793 <= r[2] <= 2026]
     rows.sort(key=lambda r: (r[2], r[4]))
     out = ROOT / "web" / "public" / "data" / "photos.json"
-    out.write_text(json.dumps({"base": BASE, "photos": rows}, separators=(",", ":"), ensure_ascii=False))
+    out.write_text(json.dumps({"base": "./photos/", "photos": rows}, separators=(",", ":"), ensure_ascii=False))
     print(f"{len(rows):,} photographs, {out.stat().st_size / 1e6:.1f} MB")

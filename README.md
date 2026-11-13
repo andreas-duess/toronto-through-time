@@ -32,7 +32,8 @@ uv run --with pillow --with scipy --with rasterio pipeline/island.py   # Island 
 uv run --with rasterio pipeline/lost.py    # lost buildings; then run build.py, streets.py and this once more
 uv run --with rasterio --with pyogrio --with scipy pipeline/trees.py   # today's trees, from the city's canopy study
 uv run pipeline/tracks.py      # streetcar tracks, for the live streetcars
-uv run pipeline/photos.py      # archive photographs (needs data/raw/oldto/images.geojson from github.com/sidewalklabs/oldto)
+uv run pipeline/photos.py      # archive photographs (needs data/raw/oldto/images.geojson from github.com/sidewalklabs/oldto);
+                               # the pictures themselves are in the R2 bucket toronto-through-time-photos, served by web/worker.js
 uv run pipeline/pack.py        # last: small copies of the building files for the page
 ```
 
