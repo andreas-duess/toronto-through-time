@@ -11,6 +11,7 @@ import { SunEffect, today, sunAt, clock } from "./sun.js";
 import { loadRoofs, roofMesh } from "./roofs.js";
 import { watchTransit, transitNow, transitName, boxMesh } from "./transit.js";
 import { watchBikes, bikeStations } from "./bikes.js";
+import { watchPlanes, planesNow, planeMesh } from "./planes.js";
 import { weather, watchWeather, fall } from "./weather.js";
 import { loadPhotos, photoPins, photo, cameraIcon } from "./photos.js";
 
@@ -197,7 +198,7 @@ map.on("moveend", writeHash);
 // the trees come and go with the zoom
 let treesOn = 0;
 let bikesShown = false;
-map.on("zoom", () => { if (meta && (treeSets() !== treesOn || transitOn() || bikesOn() || bikesShown || photosShow.on || poppiesOn())) render(); });
+map.on("zoom", () => { if (meta && (treeSets() !== treesOn || transitOn() || planesOn() || bikesOn() || bikesShown || photosShow.on || poppiesOn())) render(); });
 // and so do the batches of buildings, with the view
 let drawn = "";
 map.on("move", () => { if (buildings && drawnKey() !== drawn) render(); });
@@ -240,7 +241,7 @@ const TRUE_SIZE_ZOOM = 16;
 const STREETCAR = { size: [30, 2.5, 3.4], color: [200, 32, 38] };
 const BUS = { size: [12, 2.5, 3], color: [58, 74, 96] };
 // the switches of the two live layers in the panel
-const live = { transit: true, bikes: true };
+const live = { transit: true, bikes: true, planes: true };
 const transitOn = () => live.transit && Boolean(meta) && state.year >= meta.lastYear - 0.05 && map.getZoom() >= TRANSIT_ZOOM && !document.hidden;
 function transitLayer() {
   const larger = Math.max(1, 2 ** (TRUE_SIZE_ZOOM - map.getZoom()) * 0.75);
@@ -258,15 +259,36 @@ function transitLayer() {
     pickable: true,
   });
 }
+// Aircraft, from zoom PLANE_ZOOM in: at their real height, and drawn much larger than they are so
+// that they can be seen (about 34 pixels long).
+const PLANE_MESH = planeMesh();
+const PLANE_ZOOM = 9.5;
+const planesOn = () => live.planes && Boolean(meta) && state.year >= meta.lastYear - 0.05 && map.getZoom() >= PLANE_ZOOM && !document.hidden;
+function planeLayer() {
+  const metres = Math.max(40, (34 * 56600) / 2 ** map.getZoom());
+  return new SimpleMeshLayer({
+    id: "planes",
+    data: planesNow(),
+    mesh: PLANE_MESH,
+    getPosition: (p) => p.position,
+    getOrientation: (p) => [0, 90 - p.track, 0],
+    getColor: [24, 24, 27],
+    sizeScale: metres,
+    material: false,
+    pickable: true,
+  });
+}
+
 // While they show, the whole map is drawn again to move them: as often as it takes a vehicle at
 // 40 km/h to move two pixels, between 2 and 10 times a second. From far away that is seldom.
 let transitFrame = 0;
 function runTransit() {
   watchTransit(transitOn(), DATA + "tracks.json");
-  if (!transitOn() || transitFrame) return;
+  watchPlanes(planesOn());
+  if (!(transitOn() || planesOn()) || transitFrame) return;
   let last = 0;
   const tick = (now) => {
-    if (!transitOn()) { transitFrame = 0; return watchTransit(false); }
+    if (!(transitOn() || planesOn())) { transitFrame = 0; watchPlanes(false); return watchTransit(false); }
     const pixelsPerSecond = (11 * 2 ** map.getZoom()) / 56600;
     // render() comes back here through runTransit(): transitFrame stays set so that it starts no second loop
     if (now - last > 1000 / Math.min(10, Math.max(2, pixelsPerSecond / 2)) && !state.playing) { last = now; render(); }
@@ -995,7 +1017,7 @@ function render() {
   fadeEvents(state.year);
   updateAerial();
   const model = aerial.shown === null;
-  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(model && lost ? lostLayers() : []), ...(model ? buildingLayers() : []), ...(model && roofs ? roofLayers() : []), ...(model ? landmarkLayers() : []), ...(model && trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(poppiesOn() ? [poppyLayer()] : []), ...(photosOn() ? [photoLayer()] : []), ...(transitOn() ? [transitLayer()] : [])] });
+  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(model && lost ? lostLayers() : []), ...(model ? buildingLayers() : []), ...(model && roofs ? roofLayers() : []), ...(model ? landmarkLayers() : []), ...(model && trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(poppiesOn() ? [poppyLayer()] : []), ...(photosOn() ? [photoLayer()] : []), ...(transitOn() ? [transitLayer()] : []), ...(planesOn() ? [planeLayer()] : [])] });
   runTransit();
   watchBikes(bikesOn(), render);
   treesOn = treeSets();
@@ -1090,7 +1112,7 @@ function setupPanel() {
       about.setAttribute("aria-expanded", String(!more.hidden));
     });
   }
-  for (const key of ["transit", "bikes"]) {
+  for (const key of ["transit", "bikes", "planes"]) {
     $(key).addEventListener("click", () => {
       live[key] = !live[key];
       $(key).setAttribute("aria-pressed", String(live[key]));
@@ -1306,6 +1328,11 @@ function showBuilding(info) {
     const s = info.object;
     return showInfo(s.name, [["Bikes", s.ebikes ? `${s.bikes}, of them ${s.ebikes} electric` : s.bikes], ["Free docks", s.docks],
       ["From", "Bike Share Toronto, counted right now"]]);
+  }
+  if (info.picked && info.layer?.id === "planes") {
+    const p = info.object;
+    return showInfo(p.flight || "Aircraft", [...(p.type ? [["Type", p.type]] : []), ["Height", `${p.up.toLocaleString("en-CA")} m`],
+      ["Speed", `${Math.round(p.speed * 3.6)} km/h`], ["From", "adsb.lol, a network of volunteers' receivers. A few seconds old."]]);
   }
   if (info.picked && info.layer?.id === "transit") {
     return showInfo(transitName(info.object), [["Route", info.object.route], ["Vehicle", info.object.id],

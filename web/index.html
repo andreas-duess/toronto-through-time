@@ -93,7 +93,7 @@
           <p class="desc" id="quality-desc">Shows which building years are known and which are guesses</p>
           <p class="more" hidden>For some buildings we know the year they were built. It is written down in a city record, a building permit or an article. For most buildings nobody wrote it down, so the year is our best guess, based on how old the area is. Turn this on to colour each building by how we know its year. A key shows up on the right. Grey means a guess.<br><br>The trees show only in today's year. Where they grow comes from a 2018 city study that used satellite photos. The single trees are drawn in to fill those areas, about 341,000 of them.</p>
         </div>
-        <p class="group">Live, in today's year</p>
+        <p class="group">Live</p>
         <div class="layer today-only">
           <div class="layer-top">
             <span class="ico" aria-hidden="true">▬</span>
@@ -113,6 +113,16 @@
           </div>
           <p class="desc" id="bikes-desc">Bike share stations with bikes available</p>
           <p class="more" hidden>Each orange bike marks a Bike Share Toronto station. Click one to see how many bikes and empty docks it has right now.</p>
+        </div>
+        <div class="layer today-only">
+          <div class="layer-top">
+            <span class="ico" aria-hidden="true">✈</span>
+            <span class="name">Air traffic</span>
+            <button class="about" aria-label="About air traffic" aria-expanded="false">i</button>
+            <button id="planes" class="switch" role="switch" aria-pressed="true" aria-label="Air traffic"></button>
+          </div>
+          <p class="desc" id="planes-desc">Live air traffic</p>
+          <p class="more" hidden>Aircraft over Toronto right now, at their real height. Click one to see its flight number, type and height. The positions come from volunteers' radio receivers and are a few seconds old.</p>
         </div>
       </div>
     </aside>
