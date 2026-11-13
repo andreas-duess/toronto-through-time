@@ -18,7 +18,8 @@ export default {
     }
     // Aircraft over Toronto now (src/planes.js): from adsb.lol, asked at most every ten seconds
     // however many visitors there are, and cut down to what the page draws:
-    // [hex, flight, type, lat, lon, height (m), speed (m/s), track (degrees), age of the report (s)].
+    // { at: when adsb.lol was asked (ms), planes: [[hex, flight, type, lat, lon, height (m), speed (m/s),
+    // track (degrees), age of the report then (s)], ...] }. The answer is kept for ten seconds, so `at` says how old it is.
     if (url.pathname === "/planes") {
       const key = new Request("https://torontothroughtime.com/planes");
       let hit = await caches.default.match(key);
@@ -27,7 +28,7 @@ export default {
         const list = r.ok ? (await r.json()).ac ?? [] : [];
         const out = list.filter((a) => Number.isFinite(a.lat) && Number.isFinite(a.lon) && Number.isFinite(a.track) && a.alt_baro !== "ground" && Number.isFinite(a.alt_baro))
           .map((a) => [a.hex, (a.flight ?? "").trim(), a.t ?? "", a.lat, a.lon, Math.round(a.alt_baro * 0.3048), Math.round((a.gs ?? 0) * 0.5144), Math.round(a.track), Math.round(a.seen_pos ?? a.seen ?? 0)]);
-        hit = Response.json(out, { headers: { "cache-control": "public, max-age=10" } });
+        hit = Response.json({ at: Date.now(), planes: out }, { headers: { "cache-control": "public, max-age=10" } });
         if (r.ok) await caches.default.put(key, hit.clone());
       }
       return hit;

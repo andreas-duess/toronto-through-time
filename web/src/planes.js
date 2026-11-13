@@ -7,15 +7,23 @@ const M_PER_LAT = 111200, M_PER_LON = 80400;   // metres per degree at Toronto
 
 const planes = new Map();    // hex -> { flight, type, lon, lat, up (m), east, north (m/s), track, at (ms) }
 let timer = 0;
+// How far this computer's clock is ahead of the Worker's, as near as the freshest answer shows.
+// An answer can be up to ten seconds old when it arrives; a report stamped "now" would then throw
+// each aircraft back to where it was ten seconds ago, again and again.
+let ahead = Infinity;
 
 async function refresh() {
+  const answer = await fetch("/planes", { cache: "no-store" }).then((r) => r.json());
   const now = Date.now();
-  const list = await fetch("/planes").then((r) => r.json());
+  ahead = Math.min(ahead, now - answer.at);
   const seen = new Set();
-  for (const [hex, flight, type, lat, lon, up, speed, track, age] of list) {
+  for (const [hex, flight, type, lat, lon, up, speed, track, age] of answer.planes) {
     const turn = (track * Math.PI) / 180;
-    planes.set(hex, { flight, type, lon, lat, up, track, speed, east: Math.sin(turn) * speed, north: Math.cos(turn) * speed, at: now - age * 1000 });
+    const at = answer.at + ahead - age * 1000;
+    const before = planes.get(hex);
     seen.add(hex);
+    if (before && before.lat === lat && before.lon === lon) continue;      // the same report as last time
+    planes.set(hex, { flight, type, lon, lat, up, track, speed, east: Math.sin(turn) * speed, north: Math.cos(turn) * speed, at });
   }
   for (const hex of planes.keys()) if (!seen.has(hex)) planes.delete(hex);
 }
