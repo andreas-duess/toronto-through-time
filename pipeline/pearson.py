@@ -30,6 +30,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 RAW = ROOT / "data" / "raw" / "mississauga"
 TILES = "https://services6.arcgis.com/hM5ymMLbxIyWTjn2/arcgis/rest/services/Massing_Tiles/FeatureServer/4/query"
 BOX = "-79.672,43.652,-79.578,43.708"      # the airport (west, south, east, north)
+ASSUMED_M = 20
 
 
 def get(url):
@@ -80,6 +81,18 @@ if __name__ == "__main__":
     # a building on the edge of two tiles is in both
     g = g[~g.assign(x=g.geometry.centroid.x.round(5), y=g.geometry.centroid.y.round(5)).duplicated(["x", "y", "h"])]
     g["geometry"] = shapely.simplify(g.geometry.values, 3e-6)
+    # Terminal 1 is not in Mississauga's model. A terminal of OpenStreetMap (pipeline/airports.py, run
+    # first) that the blocks do not cover is drawn from its outline there: at 4.5 m a storey where
+    # OpenStreetMap counts storeys, otherwise at ASSUMED_M, which is a guess.
+    covered = shapely.union_all(g.geometry.values)
+    for f in json.loads((ROOT / "web" / "public" / "data" / "airports.json").read_text())["features"]:
+        if f["properties"]["kind"] != "terminal" or not (-79.672 < f["geometry"]["coordinates"][0][0][0] < -79.578):
+            continue
+        outline = shapely.Polygon(f["geometry"]["coordinates"][0]).buffer(0)
+        if outline.intersection(covered).area < 0.3 * outline.area:
+            levels = f["properties"].get("levels")
+            g.loc[len(g)] = {"h": 4.5 * levels if levels else ASSUMED_M, "geometry": max(shapely.get_parts(outline), key=lambda part: part.area)}
+            print("from OpenStreetMap's outline:", f["properties"]["name"], g.h.iloc[-1], "m")
     out = [{"p": [[round(x, 6), round(y, 6)] for x, y in shapely.get_coordinates(shapely.orient_polygons(geom).exterior)], "h": h}
            for geom, h in zip(g.geometry, g.h) if geom.geom_type == "Polygon" and not geom.is_empty]
     (ROOT / "web" / "public" / "data" / "pearson.json").write_text(json.dumps(out, separators=(",", ":")))

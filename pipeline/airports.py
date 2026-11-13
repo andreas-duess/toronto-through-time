@@ -38,7 +38,9 @@ if __name__ == "__main__":
         area = kind in ("apron", "terminal") and len(ring) >= 4 and ring[0] == ring[-1]
         if kind in ("apron", "terminal") and not area:
             continue
-        feats.append({"type": "Feature", "properties": {"kind": kind, "name": w["tags"].get("name") or w["tags"].get("ref") or ""},
+        levels = w["tags"].get("building:levels", "")
+        feats.append({"type": "Feature", "properties": {"kind": kind, "name": w["tags"].get("name") or w["tags"].get("ref") or "",
+                                                        **({"levels": int(levels)} if levels.isdigit() else {})},
                       "geometry": {"type": "Polygon", "coordinates": [ring]} if area else {"type": "LineString", "coordinates": ring}})
     OUT.write_text(json.dumps({"type": "FeatureCollection", "features": feats}, separators=(",", ":")))
     kinds = [f["properties"]["kind"] for f in feats]
