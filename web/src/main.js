@@ -71,6 +71,8 @@ const story = { index: -1, playing: false, run: 0, voice: true, narration: null,
 const SOUND_LEVEL = 0.16;
 // some louder, some softer
 const SOUND_LEVELS = { fire: 0.34, storm: 0.13, lastpost: 0.3, cheer: 0.11 };
+// heard for this many seconds only, then faded out
+const SOUND_SECONDS = { building: 9 };
 // played once, not in a loop
 const SOUND_ONCE = new Set(["lastpost"]);
 function fadeSound(sound, to, ms, then) {
@@ -107,6 +109,8 @@ function narrate(i) {
     under.loop = !SOUND_ONCE.has(stops[i].sound);
     under.volume = 0;
     story.sound = under;
+    const seconds = SOUND_SECONDS[stops[i].sound];
+    if (seconds) setTimeout(() => { if (story.sound === under) { story.sound = null; fadeSound(under, 0, 2500, () => under.pause()); } }, seconds * 1000);
     under.play().then(() => fadeSound(under, SOUND_LEVELS[stops[i].sound] ?? SOUND_LEVEL, 1500)).catch(() => { if (story.sound === under) story.sound = null; });
     // it fades out as the voice ends
     sound.addEventListener("ended", () => { if (story.sound === under) { story.sound = null; fadeSound(under, 0, 1800, () => under.pause()); } });
