@@ -259,6 +259,29 @@ function transitLayer() {
     pickable: true,
   });
 }
+// The buildings of Pearson airport (pipeline/pearson.py), in today's year: the terminals, hangars
+// and the tower, drawn like the city's buildings.
+let pearson = null;
+function pearsonLayer() {
+  return new SolidPolygonLayer({
+    id: "pearson",
+    beforeId: map.getLayer("places-city") ? "places-city" : undefined,
+    data: pearson,
+    getPolygon: (b) => b.p,
+    extruded: true,
+    getElevation: (b) => b.h,
+    getFillColor: OLD_COLOR,
+    material: MATERIAL,
+    getYears: [0, 9999, 1, 1],
+    currentYear: state.year,
+    growYears: RISE_YEARS,
+    tint: [1, 1, 1],
+    tintYears: NEW_SPAN,
+    sunDirection: sun.direction,
+    extensions: [riseExtension],
+  });
+}
+
 // Aircraft, from zoom PLANE_ZOOM in: at their real height, and drawn much larger than they are so
 // that they can be seen (about 34 pixels long).
 const PLANE_MESH = planeMesh();
@@ -584,6 +607,7 @@ async function load() {
   story.files = await fetchJson("narration.json").catch(() => []);
   events = await fetchJson("events.json").catch(() => null);
   fetchJson("poppies.json").then((p) => { poppies = p; render(); }).catch(() => {});
+  fetchJson("pearson.json").then((p) => { pearson = p; render(); }).catch(() => {});
   state.year = opened.year >= meta.firstYear && opened.year <= meta.lastYear ? opened.year : meta.firstYear;
   setupControls();
   render();
@@ -1035,7 +1059,7 @@ function render() {
   fadeEvents(state.year);
   updateAerial();
   const model = aerial.shown === null;
-  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(model && lost ? lostLayers() : []), ...(model ? buildingLayers() : []), ...(model && roofs ? roofLayers() : []), ...(model ? landmarkLayers() : []), ...(model && trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(poppiesOn() ? [poppyLayer()] : []), ...(photosOn() ? [photoLayer()] : []), ...(transitOn() ? [transitLayer()] : []), ...(planesOn() ? [planeLayer()] : [])] });
+  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(model && lost ? lostLayers() : []), ...(model ? buildingLayers() : []), ...(model && roofs ? roofLayers() : []), ...(model ? landmarkLayers() : []), ...(model && trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(poppiesOn() ? [poppyLayer()] : []), ...(photosOn() ? [photoLayer()] : []), ...(pearson && state.year >= meta.lastYear ? [pearsonLayer()] : []), ...(transitOn() ? [transitLayer()] : []), ...(planesOn() ? [planeLayer()] : [])] });
   runTransit();
   watchBikes(bikesOn(), render);
   treesOn = treeSets();

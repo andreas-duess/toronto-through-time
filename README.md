@@ -33,6 +33,7 @@ uv run --with rasterio pipeline/lost.py    # lost buildings; then run build.py, 
 uv run --with rasterio --with pyogrio --with scipy pipeline/trees.py   # today's trees, from the city's canopy study
 uv run pipeline/tracks.py      # streetcar tracks, for the live streetcars
 uv run pipeline/airports.py    # runways and terminals of Pearson and the Island airport, for the live aircraft
+uv run --no-project --python 3.12 --with fiona --with geopandas --with pyproj pipeline/pearson.py   # Pearson's buildings from Mississauga's 3D model
 uv run pipeline/narrate.py     # the story read aloud (ElevenLabs), after any change to data/manual/story.csv
 uv run --no-project --python 3.12 --with fiona --with geopandas --with pyproj pipeline/shapes.py   # real shapes of big buildings, before build.py
 uv run pipeline/photos.py      # archive photographs (needs data/raw/oldto/images.geojson from github.com/sidewalklabs/oldto);
