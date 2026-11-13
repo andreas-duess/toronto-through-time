@@ -1099,7 +1099,13 @@ function setupPanel() {
   }
 }
 
+// a speaker with sound waves, and one crossed out
+const SPEAKER = '<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/>';
+const SPEAKER_ON = SPEAKER + '<path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18.3 6.5a8 8 0 0 1 0 11"/></svg>';
+const SPEAKER_OFF = SPEAKER + '<path d="M16 9.5l5 5"/><path d="M21 9.5l-5 5"/></svg>';
+
 function setupControls() {
+  $("story-sound").innerHTML = SPEAKER_ON;
   setupSun();
   setupPanel();
   const slider = $("slider");
@@ -1167,7 +1173,7 @@ function setupControls() {
   $("story-sound").addEventListener("click", () => {
     story.voice = !story.voice;
     $("story-sound").setAttribute("aria-pressed", String(story.voice));
-    $("story-sound").textContent = story.voice ? "🔊" : "🔇";
+    $("story-sound").innerHTML = story.voice ? SPEAKER_ON : SPEAKER_OFF;
     if (!story.voice) hush(); else if (story.playing) openStop(story.index, true);
   });
   document.addEventListener("keydown", (e) => {

@@ -76,7 +76,8 @@ html, body {
 #story-toggle[aria-pressed="true"] .on { display: inline; }
 #story-toggle[aria-pressed="true"] { background: var(--ink); }
 #panel .story-note { margin: 8px 0 12px; font-size: 12px; color: var(--muted); }
-#story-sound { font-size: 14px; }
+#story-sound { display: inline-flex; align-items: center; }
+#story-sound svg { display: block; }
 #story-sound[aria-pressed="false"] { opacity: 0.45; }
 #panel .ico { width: 20px; text-align: center; color: var(--muted); font-size: 14px; flex: none; }
 #panel .layer .ico { display: none; }

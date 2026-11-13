@@ -16,6 +16,7 @@ import csv
 import hashlib
 import json
 import pathlib
+import re
 import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -36,12 +37,29 @@ SOUNDS = {
     "hooves": "Horses' hooves walking on a cobbled city street pulling a streetcar on rails, a small bell now and then, no voices, no music",
 }
 
+ONES = "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split()
+TENS = "- - twenty thirty forty fifty sixty seventy eighty ninety".split()
+
+
+def words(n):
+    """A whole number under a million in words: 6200 -> "six thousand two hundred". Written as
+    "6,200" the voice read it as "six, two hundred"."""
+    if n < 20:
+        return ONES[n]
+    if n < 100:
+        return TENS[n // 10] + ("-" + ONES[n % 10] if n % 10 else "")
+    if n < 1000:
+        return ONES[n // 100] + " hundred" + (" and " + words(n % 100) if n % 100 else "")
+    return words(n // 1000) + " thousand" + (" " + words(n % 1000) if n % 1000 else "")
+
+
 if __name__ == "__main__":
     key = (pathlib.Path.home() / ".config" / "secrets" / "ELEVENLABS_API_KEY").read_text().strip().split("=")[-1]
     AUDIO.mkdir(parents=True, exist_ok=True)
     files, made = [], 0
     for stop in csv.DictReader((ROOT / "data" / "manual" / "story.csv").open()):
-        said = stop["text"]      # the headline is on the card; the voice reads the text only
+        # the headline is on the card; the voice reads the text only, with large numbers in words
+        said = re.sub(r"\b\d{1,3}(?:,\d{3})+\b", lambda m: words(int(m.group().replace(",", ""))), stop["text"])
         name = hashlib.sha1(f"{VOICE}|{MODEL}|{said}".encode()).hexdigest()[:12] + ".mp3"
         files.append(name)
         if (AUDIO / name).exists():
