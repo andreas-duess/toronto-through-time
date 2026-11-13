@@ -1373,8 +1373,19 @@ function showBuilding(info) {
   }
   if (info.picked && info.layer?.id === "planes") {
     const p = info.object;
-    return showInfo(p.flight || "Aircraft", [...(p.type ? [["Type", p.type]] : []), ["Height", p.up ? `${p.up.toLocaleString("en-CA")} m` : "on the ground"],
-      ["Speed", `${Math.round(p.speed * 3.6)} km/h`], ["From", "adsb.lol, a network of volunteers' receivers. A few seconds old."]]);
+    const rows = (route) => [...(route ? [["Airline", route.airline], ["Route", route.text]] : []), ...(p.type ? [["Type", p.type]] : []),
+      ["Height", p.up ? `${p.up.toLocaleString("en-CA")} m` : "on the ground"], ["Speed", `${Math.round(p.speed * 3.6)} km/h`],
+      ["From", `adsb.lol, a network of volunteers' receivers. A few seconds old.${route ? " The route is the usual one for this flight number (adsbdb.com) and can be wrong on the day." : ""}`]];
+    showInfo(p.flight || "Aircraft", rows(null));
+    // Where the flight usually goes, looked up by its flight number. Private aircraft have none.
+    if (/^[A-Z]{3}\d/.test(p.flight)) {
+      fetch(`https://api.adsbdb.com/v0/callsign/${encodeURIComponent(p.flight)}`).then((r) => r.json()).then((d) => {
+        const f = d.response?.flightroute;
+        if (!f?.origin || !f?.destination || $("info").hidden || $("info").querySelector("h3")?.textContent !== p.flight) return;
+        showInfo(p.flight, rows({ airline: f.airline?.name ?? "", text: `${f.origin.municipality} (${f.origin.iata_code}) to ${f.destination.municipality} (${f.destination.iata_code})` }));
+      }).catch(() => {});
+    }
+    return;
   }
   if (info.picked && info.layer?.id === "transit") {
     return showInfo(transitName(info.object), [["Route", info.object.route], ["Vehicle", info.object.id],
