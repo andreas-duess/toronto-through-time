@@ -1,7 +1,8 @@
 """Homes of Torontonians who died in the Second World War: web/public/data/poppies.json.
 
-data/manual/war_dead_addresses.txt is a list of street addresses, one a line, from a published
-map of Toronto's war dead (pasted in by hand; its notes such as "geocoded from 1940 city
+data/manual/war_dead_addresses.txt is a list of street addresses, one a line, from the "Toronto
+Second World War casualty map" (a printout of its list, which begins at house numbers starting
+with 3: those starting with 1 and 2 are missing; its notes such as "geocoded from 1940 city
 directory" are kept in the file). The list has addresses only: no names. Each address is looked
 up in the City's address points (data/raw/address_points.csv). Where today's city has the street
 but not the number, the nearest number on the same side of that street is used. Addresses whose
