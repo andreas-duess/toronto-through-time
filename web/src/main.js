@@ -127,16 +127,12 @@ const map = new maplibregl.Map({
 });
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
 map.on("moveend", writeHash);
-// A tip beside the zoom buttons on how to turn the map, until the visitor has turned it once.
-function hintRotate() {
-  const seen = () => { try { return localStorage.getItem("rotated"); } catch { return null; } };
-  if (seen()) return;
+// A tip beside the zoom buttons on how to turn the map. It stays.
+{
   const hint = document.getElementById("rotate-hint");
-  hint.textContent = window.matchMedia?.("(pointer: coarse)").matches ? "Twist with two fingers to rotate" : "Right-drag to rotate and tilt";
+  hint.textContent = window.matchMedia?.("(pointer: coarse)").matches ? "Twist with two fingers to rotate" : "Control-click and drag to rotate";
   hint.hidden = false;
-  map.once("rotate", () => { hint.hidden = true; try { localStorage.setItem("rotated", "1"); } catch { /* private window */ } });
 }
-hintRotate();
 // the trees come and go with the zoom
 let treesOn = 0;
 let bikesShown = false;
