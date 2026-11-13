@@ -27,11 +27,11 @@
     box.setAttribute("role", "dialog");
     box.setAttribute("aria-label", "Cookies");
     box.style.cssText = "position:fixed;left:16px;right:16px;bottom:16px;z-index:1000;max-width:560px;margin:0 auto;padding:14px 16px;" +
-      "background:#fff;color:#1d2733;border:1px solid rgba(29,39,51,.18);border-radius:10px;box-shadow:0 8px 30px rgba(29,39,51,.22);" +
-      "font:14px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
+      "background:#fff;color:#18181b;border:1px solid #e4e4e7;border-radius:14px;box-shadow:0 8px 30px rgba(29,39,51,.22);" +
+      "font:14px/1.45 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
     box.innerHTML = '<p style="margin:0 0 10px">This site would like to use Google Analytics cookies to count visits. ' +
-      'The map works the same either way. <a href="/privacy" style="color:#b8431f">Privacy</a></p>' +
-      '<button id="consent-yes" style="margin-right:8px;padding:7px 14px;border:0;border-radius:6px;background:#d9542b;color:#fff;font:inherit;cursor:pointer">Accept</button>' +
+      'The map works the same either way. <a href="/privacy" style="color:#c2410c">Privacy</a></p>' +
+      '<button id="consent-yes" style="margin-right:8px;padding:7px 14px;border:0;border-radius:6px;background:#c2410c;color:#fff;font:inherit;cursor:pointer">Accept</button>' +
       '<button id="consent-no" style="padding:7px 14px;border:1px solid rgba(29,39,51,.25);border-radius:6px;background:#fff;color:#1d2733;font:inherit;cursor:pointer">No thanks</button>';
     document.body.appendChild(box);
     document.getElementById("consent-yes").onclick = function () { keep("granted"); box.remove(); loadTag(); };
