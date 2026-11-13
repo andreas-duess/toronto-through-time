@@ -1,7 +1,7 @@
 import maplibregl from "maplibre-gl";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { COORDINATE_SYSTEM } from "@deck.gl/core";
-import { SolidPolygonLayer } from "@deck.gl/layers";
+import { SolidPolygonLayer, IconLayer } from "@deck.gl/layers";
 import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
 import { TimeExtension } from "./time.js";
 import { landmarkParts, FACTS } from "./landmarks.js";
@@ -139,7 +139,7 @@ hintRotate();
 // the trees come and go with the zoom
 let treesOn = 0;
 let bikesShown = false;
-map.on("zoom", () => { if (meta && (treeSets() !== treesOn || transitOn() || bikesOn() !== bikesShown)) render(); });
+map.on("zoom", () => { if (meta && (treeSets() !== treesOn || transitOn() || bikesOn() || bikesShown)) render(); });
 // and so do the batches of buildings, with the view
 let drawn = "";
 map.on("move", () => { if (buildings && drawnKey() !== drawn) render(); });
@@ -215,24 +215,41 @@ function runTransit() {
 }
 document.addEventListener("visibilitychange", () => { if (meta) runTransit(); });
 
-// Bike Share stations, in today's year: a post per station, taller the more bikes it has now,
-// grey when it has none and dark when it has no free dock.
+// Bike Share stations, in today's year: an orange disc with a bicycle at each station, the same
+// for all; the counts are in the card. The disc faces the screen and keeps its size, a little
+// smaller from further away.
 const BIKE_ZOOM = 13;
-const BIKE_COLORS = { some: [255, 138, 0], none: [165, 165, 165], full: [120, 62, 0] };
 const today_ = () => Boolean(meta) && state.year >= meta.lastYear - 0.05;
 const bikesOn = () => today_() && map.getZoom() >= BIKE_ZOOM;
+const BIKE_ICON = (() => {
+  const c = document.createElement("canvas");
+  c.width = c.height = 96;
+  const g = c.getContext("2d");
+  g.scale(1.5, 1.5);
+  g.beginPath(); g.arc(32, 32, 29, 0, 6.3); g.fillStyle = "#ff8a00"; g.fill();
+  g.lineWidth = 3; g.strokeStyle = "#fff"; g.stroke();
+  g.lineWidth = 2.6; g.lineCap = g.lineJoin = "round";
+  // wheels, frame, fork, handlebar, saddle
+  g.beginPath(); g.arc(19, 40, 9, 0, 6.3); g.moveTo(54, 40); g.arc(45, 40, 9, 0, 6.3); g.stroke();
+  g.beginPath();
+  g.moveTo(19, 40); g.lineTo(28, 26); g.lineTo(41, 26); g.lineTo(31, 40); g.lineTo(19, 40);
+  g.moveTo(28, 26); g.lineTo(31, 40);
+  g.moveTo(45, 40); g.lineTo(40, 21); g.lineTo(45, 20);
+  g.moveTo(28, 26); g.lineTo(27, 22); g.moveTo(23, 22); g.lineTo(31, 22);
+  g.stroke();
+  return c.toDataURL();
+})();
 function bikeLayer() {
-  const larger = Math.max(1, 2 ** (TRUE_SIZE_ZOOM - map.getZoom()) * 0.75);
-  return new SimpleMeshLayer({
+  return new IconLayer({
     id: "bikes",
     beforeId: map.getLayer("places-city") ? "places-city" : undefined,
     data: bikeStations(),
-    mesh: BOX_MESH,
+    iconAtlas: BIKE_ICON,
+    iconMapping: { bike: { x: 0, y: 0, width: 96, height: 96, anchorY: 96 } },
+    getIcon: () => "bike",
     getPosition: (s) => s.position,
-    getScale: (s) => [4, 4, 6 + Math.min(40, s.bikes) * 0.5],
-    getColor: (s) => (s.bikes === 0 ? BIKE_COLORS.none : s.docks === 0 ? BIKE_COLORS.full : BIKE_COLORS.some),
-    sizeScale: larger,
-    material: MATERIAL,
+    getSize: Math.min(30, Math.max(14, 14 + (map.getZoom() - BIKE_ZOOM) * 5.5)),
+    sizeUnits: "pixels",
     pickable: true,
   });
 }
