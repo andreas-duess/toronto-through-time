@@ -82,8 +82,9 @@ const SOUND_ONCE = new Set(["lastpost"]);
 function fadeSound(sound, to, ms, then) {
   const from = sound.volume, start = performance.now();
   const step = (now) => {
-    const k = Math.min(1, (now - start) / ms);
-    sound.volume = from + (to - from) * k;
+    // (a frame's time can lie a moment before `start`, and a volume below 0 is an error that would stop the fade)
+    const k = Math.min(1, Math.max(0, (now - start) / ms));
+    sound.volume = Math.min(1, Math.max(0, from + (to - from) * k));
     if (k < 1) requestAnimationFrame(step); else then?.();
   };
   requestAnimationFrame(step);
