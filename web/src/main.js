@@ -9,6 +9,7 @@ import { fetchPacked, fetchMetres, fetchStarts, fetchPositions } from "./pack.js
 import { loadTrees, treeMesh, TREE_COLORS } from "./trees.js";
 import { SunEffect, today, sunAt, clock } from "./sun.js";
 import { loadRoofs, roofMesh } from "./roofs.js";
+import { watchTransit, transitNow, transitName, boxMesh } from "./transit.js";
 
 const $ = (id) => document.getElementById(id);
 const DATA = "./data/";
@@ -135,7 +136,7 @@ function hintRotate() {
 hintRotate();
 // the trees come and go with the zoom
 let treesOn = 0;
-map.on("zoom", () => { if (meta && treeSets() !== treesOn) render(); });
+map.on("zoom", () => { if (meta && (treeSets() !== treesOn || transitOn())) render(); });
 // and so do the batches of buildings, with the view
 let drawn = "";
 map.on("move", () => { if (buildings && drawnKey() !== drawn) render(); });
@@ -169,6 +170,46 @@ const TREE_ZOOMS = [13, 14.5, 15.5];
 const TREE_LARGER = [1.5, 1.25, 1];
 const TREE_MESH = treeMesh();
 let trees = null;
+// The TTC's buses and streetcars, in today's year only and from TRANSIT_ZOOM in. They are drawn at
+// their true size close in and larger from further away, so that they can still be seen.
+const BOX_MESH = boxMesh();
+const TRANSIT_ZOOM = 12.5;
+const TRUE_SIZE_ZOOM = 16;
+const STREETCAR = { size: [30, 2.5, 3.4], color: [200, 32, 38] };
+const BUS = { size: [12, 2.5, 3], color: [58, 74, 96] };
+const transitOn = () => Boolean(meta) && state.year >= meta.lastYear - 0.05 && map.getZoom() >= TRANSIT_ZOOM && !document.hidden;
+function transitLayer() {
+  const larger = Math.max(1, 2 ** (TRUE_SIZE_ZOOM - map.getZoom()) * 0.75);
+  return new SimpleMeshLayer({
+    id: "transit",
+    beforeId: map.getLayer("places-city") ? "places-city" : undefined,
+    data: transitNow(),
+    mesh: BOX_MESH,
+    getPosition: (v) => v.position,
+    getOrientation: (v) => [0, 90 - v.heading, 0],
+    getScale: (v) => (v.car ? STREETCAR : BUS).size,
+    getColor: (v) => (v.car ? STREETCAR : BUS).color,
+    sizeScale: larger,
+    material: MATERIAL,
+    pickable: true,
+  });
+}
+// While they show, the map is drawn again about 20 times a second to move them.
+let transitFrame = 0;
+function runTransit() {
+  watchTransit(transitOn());
+  if (!transitOn() || transitFrame) return;
+  let last = 0;
+  const tick = (now) => {
+    if (!transitOn()) { transitFrame = 0; return watchTransit(false); }
+    // render() comes back here through runTransit(): transitFrame stays set so that it starts no second loop
+    if (now - last > 50 && !state.playing) { last = now; render(); }
+    transitFrame = requestAnimationFrame(tick);
+  };
+  transitFrame = requestAnimationFrame(tick);
+}
+document.addEventListener("visibilitychange", () => { if (meta) runTransit(); });
+
 // Sloped roofs of the houses. They come in ROOF_SETS sets in order of their year. A set whose
 // houses are all older than NEW_SPAN is drawn as it is; the roofs of newer houses are drawn apart,
 // rising and losing their colour with the walls below them.
@@ -362,6 +403,18 @@ function landmarkLayers() {
   }));
 }
 
+// the same object for the same run of roofs, so that a layer is only worked out again when its
+// roofs change
+const roofRuns = new Map();
+function roofRun(from, to) {
+  const key = `${from}-${to}`;
+  if (!roofRuns.has(key)) {
+    if (roofRuns.size > 200) roofRuns.clear();
+    roofRuns.set(key, { length: to - from });
+  }
+  return roofRuns.get(key);
+}
+
 // Roofs [from, to) as one layer. `settled` roofs are full height and plain; the others follow the
 // year the way the walls do (time.js).
 function roofLayer(id, from, to, settled) {
@@ -373,7 +426,7 @@ function roofLayer(id, from, to, settled) {
   return new SimpleMeshLayer({
     id,
     beforeId: map.getLayer("places-city") ? "places-city" : undefined,
-    data: { length: to - from },
+    data: roofRun(from, to),
     mesh: ROOF_MESH,
     coordinateSystem: COORDINATE_SYSTEM.LNGLAT_OFFSETS,
     coordinateOrigin: meta.origin,
@@ -635,7 +688,8 @@ function render() {
   const y = Math.floor(state.year);
   const shore = updateWater(state.year);
   updateMap(state.year);
-  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(lost ? lostLayers() : []), ...buildingLayers(), ...(roofs ? roofLayers() : []), ...landmarkLayers(), ...(trees ? treeLayers() : [])] });
+  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(lost ? lostLayers() : []), ...buildingLayers(), ...(roofs ? roofLayers() : []), ...landmarkLayers(), ...(trees ? treeLayers() : []), ...(transitOn() ? [transitLayer()] : [])] });
+  runTransit();
   treesOn = treeSets();
   drawn = drawnKey();
   writeHash();
@@ -870,6 +924,10 @@ function closeStory() {
 }
 
 function showBuilding(info) {
+  if (info.picked && info.layer?.id === "transit") {
+    return showInfo(transitName(info.object), [["Route", info.object.route], ["Vehicle", info.object.id],
+      ["Source", "TTC live vehicle positions, up to 30 seconds old"]]);
+  }
   if (info.picked && info.layer?.id.startsWith("landmark-")) {
     const fact = FACTS[info.object.key];
     return showInfo(fact.name, [...fact.rows, ["More", `<a href="${fact.url}" target="_blank" rel="noopener">article</a>`]]);
