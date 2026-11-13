@@ -66,7 +66,7 @@ const fetchJson = (name) => fetch(DATA + name).then((r) => r.json());
 const state = { year: 1793, playing: false, speed: 6, quality: false };
 // index: the stop on the card (-1 when closed); run: bumped to cancel a stop's animation
 // voice: whether the story is read aloud; narration: the sound of the stop being read, if any
-const story = { index: -1, playing: false, run: 0, voice: true, narration: null, files: [], sound: null };
+const story = { index: -1, playing: false, run: 0, voice: true, narration: null, files: [], sound: null, left: null };
 // A few stops have a sound under the voice (a battle, a fire, hooves): quiet, in a loop, fading in and out.
 const SOUND_LEVEL = 0.16;
 function fadeSound(sound, to, ms, then) {
@@ -79,6 +79,8 @@ function fadeSound(sound, to, ms, then) {
   requestAnimationFrame(step);
 }
 function hush() {
+  // where the voice was stopped, so that the same stop picks up there again
+  if (story.narration && !story.narration.ended) story.left = { index: story.index, time: story.narration.currentTime };
   story.narration?.pause();
   story.narration = null;
   const sound = story.sound;
@@ -88,8 +90,12 @@ function hush() {
 // Reads a stop aloud. Without sound (switched off, or the browser refuses) the story keeps its own time.
 function narrate(i) {
   hush();
+  // a stop that was paused goes on from a moment before where it stopped
+  const from = story.left?.index === i ? Math.max(0, story.left.time - 1) : 0;
+  story.left = null;
   if (!story.voice || !story.files[i]) return;
   const sound = new Audio(`./audio/${story.files[i]}`);
+  if (from) sound.currentTime = from;
   story.narration = sound;
   sound.play().catch(() => { if (story.narration === sound) story.narration = null; });
   if (stops[i].sound) {
@@ -1066,11 +1072,15 @@ function setupControls() {
     while (i + 1 < stops.length && stops[i + 1].year <= state.year) i++;
     // of several stops in the same year, the first
     while (i > 0 && stops[i - 1].year === stops[i].year) i--;
+    // closed in the middle of a stop and the year not moved since: on from there
+    const kept = story.left;
+    if (kept && state.year >= stops[kept.index].year - 0.01 && state.year <= stops[kept.index].yearEnd + 0.01) return openStop(kept.index, true);
     openStop(state.year >= meta.lastYear ? 0 : i, true);
   });
   $("story-close").addEventListener("click", closeStory);
-  $("story-prev").addEventListener("click", () => openStop(Math.max(0, story.index - 1), story.playing));
-  $("story-next").addEventListener("click", () => openStop(Math.min(stops.length - 1, story.index + 1), story.playing));
+  // back and forward start a stop from its beginning
+  $("story-prev").addEventListener("click", () => { hush(); story.left = null; openStop(Math.max(0, story.index - 1), story.playing); });
+  $("story-next").addEventListener("click", () => { hush(); story.left = null; openStop(Math.min(stops.length - 1, story.index + 1), story.playing); });
   $("story-play").addEventListener("click", () => {
     if (!story.playing) return openStop(story.index, true);
     // keep the run going so the year still arrives at the stop's year
