@@ -70,8 +70,17 @@ html, body {
 #panel-head[aria-expanded="false"] .chev { transform: rotate(-90deg); }
 #panel-body { overflow-y: auto; padding: 0 14px 10px; border-top: 1px solid var(--line); }
 #panel-body[hidden] { display: none; }
+#story-toggle { display: block; width: 100%; margin-top: 12px; padding: 10px 12px; border: 0; border-radius: 8px; background: var(--accent); color: #fff;
+  font: 600 15px/1.2 inherit; font-family: inherit; cursor: pointer; }
+#story-toggle:hover { filter: brightness(1.06); }
+#story-toggle .on, #story-toggle[aria-pressed="true"] .off { display: none; }
+#story-toggle[aria-pressed="true"] .on { display: inline; }
+#story-toggle[aria-pressed="true"] { background: var(--ink); }
+#panel .story-note { margin: 6px 0 10px; font-size: 12.5px; color: var(--muted); }
+#story-sound { font-size: 14px; }
+#story-sound[aria-pressed="false"] { opacity: 0.45; }
 #panel .ico { width: 20px; text-align: center; color: var(--accent); font-size: 14px; flex: none; }
-#sun { display: flex; align-items: center; gap: 8px; padding: 12px 0 4px; font-size: 13px; }
+#sun { display: flex; align-items: center; gap: 8px; padding: 10px 0 4px; font-size: 13px; border-top: 1px solid var(--line); }
 #sun[hidden] { display: none; }
 #weather-now { margin: 0 0 4px 28px; font-size: 12.5px; color: var(--muted); }
 #weather-now[hidden] { display: none; }

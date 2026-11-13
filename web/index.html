@@ -38,6 +38,7 @@
         <button id="story-prev" aria-label="Previous">⏮</button>
         <button id="story-play" aria-label="Pause story">❚❚</button>
         <button id="story-next" aria-label="Next">⏭</button>
+        <button id="story-sound" aria-pressed="true" aria-label="Voice on or off" title="Voice on or off">🔊</button>
         <a id="story-source" target="_blank" rel="noopener">source</a>
       </div>
     </div>
@@ -46,6 +47,8 @@
     <aside id="panel">
       <button id="panel-head" aria-expanded="true"><span>Map layers</span><span class="chev" aria-hidden="true">▾</span></button>
       <div id="panel-body">
+        <button id="story-toggle" aria-pressed="false"><span class="off">▶&nbsp; Play the story</span><span class="on">■&nbsp; Close the story</span></button>
+        <p class="story-note">A tour of the city's history, read aloud. About 12 minutes.</p>
         <div id="sun" hidden title="The sun over Toronto today, at this time of day">
           <span class="ico" aria-hidden="true">☀</span>
           <input id="sun-slider" type="range" step="5" aria-label="Time of day" />
@@ -61,7 +64,7 @@
             <button id="aerial" class="switch" role="switch" aria-pressed="false" aria-label="Aerial photographs"></button>
           </div>
           <p class="desc" id="aerial-desc">Aerial photography of the city, starting 1931</p>
-          <p class="more" hidden>The City of Toronto photographed the city from the air in 1931, 1939, 1954, 1965, 1978 and most years since 1999. Switched on, the survey nearest the year on the slider takes the place of the drawn map, and the 3D buildings and trees step aside, because the photograph has its own. Use it to check the model against what a camera saw. Between surveys the photograph can be a few years off; the note at the top right says which survey it is.</p>
+          <p class="more" hidden>The city took photos of Toronto from a plane in 1931, 1939, 1954, 1965, 1978 and in most years since 1999. Turn this on to see the photo closest to the year you picked. The drawn map and the 3D buildings are hidden, because the photo shows the real ones. A note at the top right tells you which year's photo you are looking at. It can be a few years away from the year on the slider.</p>
         </div>
         <div class="layer">
           <div class="layer-top">
@@ -71,7 +74,7 @@
             <button id="photos" class="switch" role="switch" aria-pressed="true" aria-label="Archive photographs"></button>
           </div>
           <p class="desc" id="photos-desc">Historic images by year</p>
-          <p class="more" hidden>Camera pins mark City of Toronto Archives photographs taken within two years of the year on the slider. Click a pin to see the pictures there. A pin marks the place named in a picture's title, not where the photographer stood.</p>
+          <p class="more" hidden>Each camera pin is a spot where an old photo was taken, within two years of the year you picked. Click a pin to see the photos. The photos come from the City of Toronto Archives. A pin shows the place named in the photo's title, so it can be a little off.</p>
         </div>
         <div class="layer">
           <div class="layer-top">
@@ -80,8 +83,8 @@
             <button class="about" aria-label="About data quality" aria-expanded="false">i</button>
             <button id="quality" class="switch" role="switch" aria-pressed="false" aria-label="Data quality"></button>
           </div>
-          <p class="desc" id="quality-desc">Shows which building dates are on record and which are estimates</p>
-          <p class="more" hidden>For some buildings there is a record of when they were built: a heritage listing, a building permit, or an article about a landmark. For most there is none, and the year is an estimate based on the age of the neighbourhood. Switched on, every building is coloured by which of these its year rests on, and a key appears on the right. Grey buildings are estimates.<br><br>Trees are not coloured. They show in today's year only and come from the City of Toronto's 2018 tree canopy study, which mapped the canopy from satellite images and lidar. Where trees stand is from the study; the single trees, about 341,000 of them, and their sizes are drawn to fill that canopy.</p>
+          <p class="desc" id="quality-desc">Shows which building years are known and which are guesses</p>
+          <p class="more" hidden>For some buildings we know the year they were built. It is written down in a city record, a building permit or an article. For most buildings nobody wrote it down, so the year is our best guess, based on how old the area is. Turn this on to colour each building by how we know its year. A key shows up on the right. Grey means a guess.<br><br>The trees show only in today's year. Where they grow comes from a 2018 city study that used satellite photos. The single trees are drawn in to fill those areas, about 341,000 of them.</p>
         </div>
         <p class="group">Live, in today's year</p>
         <div class="layer today-only">
@@ -91,8 +94,8 @@
             <button class="about" aria-label="About buses and streetcars" aria-expanded="false">i</button>
             <button id="transit" class="switch" role="switch" aria-pressed="true" aria-label="Buses and streetcars"></button>
           </div>
-          <p class="desc" id="transit-desc">Where the TTC's vehicles are now</p>
-          <p class="more" hidden>The TTC's own feed of vehicle positions, up to 30 seconds old. Streetcars are red and run on the tracks; buses are dark. Click one for its route.</p>
+          <p class="desc" id="transit-desc">See where buses and streetcars are right now</p>
+          <p class="more" hidden>These are real TTC buses and streetcars, shown where they are right now. The positions can be up to 30 seconds old. Streetcars are red. Buses are dark blue. Click one to see its route.</p>
         </div>
         <div class="layer today-only">
           <div class="layer-top">
@@ -102,7 +105,7 @@
             <button id="bikes" class="switch" role="switch" aria-pressed="true" aria-label="Bike Share"></button>
           </div>
           <p class="desc" id="bikes-desc">Bike share stations with bikes available</p>
-          <p class="more" hidden>Every Bike Share Toronto station. Click one for the bikes and free docks it has at this moment.</p>
+          <p class="more" hidden>Each orange bike marks a Bike Share Toronto station. Click one to see how many bikes and empty docks it has right now.</p>
         </div>
       </div>
     </aside>
@@ -113,7 +116,6 @@
 
     <footer id="controls">
       <button id="play" aria-label="Play">▶</button>
-      <button id="story-toggle" aria-pressed="false">Story</button>
       <div id="slider-wrap">
         <div id="event-ticks"></div>
         <input id="slider" type="range" step="0.01" aria-label="Year" />

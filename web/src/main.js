@@ -46,12 +46,12 @@ const TIER_COLORS = {
   estimate: [200, 200, 200],
 };
 const TIER_LABELS = {
-  landmark: "Named landmark (Wikidata, hand-checked list)",
-  heritage: "Heritage Register construction date",
-  apartment: "Apartment registration, year built",
-  massing: "First seen in the city's yearly 3D model",
-  permit: "Building permit for a new building",
-  estimate: "Estimate: census period and nearby dated buildings",
+  landmark: "Well-known building. The year is from an article about it.",
+  heritage: "The year is from the city's list of heritage buildings.",
+  apartment: "The year is from the city's apartment records.",
+  massing: "Built since 2016. The year is when it first showed up in the city's 3D model.",
+  permit: "The year is from its building permit.",
+  estimate: "Best guess, from the age of the area and the buildings around it.",
 };
 
 const LAND_COLOR = "#e9e3d3";
@@ -65,7 +65,20 @@ const fetchJson = (name) => fetch(DATA + name).then((r) => r.json());
 
 const state = { year: 1793, playing: false, speed: 6, quality: false };
 // index: the stop on the card (-1 when closed); run: bumped to cancel a stop's animation
-const story = { index: -1, playing: false, run: 0 };
+// voice: whether the story is read aloud; narration: the sound of the stop being read, if any
+const story = { index: -1, playing: false, run: 0, voice: true, narration: null, files: [] };
+function hush() {
+  story.narration?.pause();
+  story.narration = null;
+}
+// Reads a stop aloud. Without sound (switched off, or the browser refuses) the story keeps its own time.
+function narrate(i) {
+  hush();
+  if (!story.voice || !story.files[i]) return;
+  const sound = new Audio(`./audio/${story.files[i]}`);
+  story.narration = sound;
+  sound.play().catch(() => { if (story.narration === sound) story.narration = null; });
+}
 const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 // time to read a story card
 const readMs = (text) => Math.max(7000, text.split(/\s+/).length * 330);
@@ -145,6 +158,7 @@ for (const type of ["mousedown", "wheel", "touchstart"]) {
   map.getCanvasContainer().addEventListener(type, () => {
     if (!story.playing) return;
     story.playing = false;
+    hush();
     map.stop();
     syncStoryButton();
   }, { passive: true });
@@ -330,7 +344,7 @@ function showPhotos(ids, n) {
   box.innerHTML = `<button class="close" aria-label="Close">✕</button>` +
     `<a href="${escapeHtml(p.image)}" target="_blank" rel="noopener"><img src="${escapeHtml(p.image)}" alt=""></a>` +
     `<p class="caption">${escapeHtml(p.title)}, ${escapeHtml(p.year)}</p>` +
-    `<p class="credit">City of Toronto Archives, ${escapeHtml(p.citation)}. Placed on the map by OldTO from its title.</p>` +
+    `<p class="credit">Photo: City of Toronto Archives, ${escapeHtml(p.citation)}. The pin shows the place named in the photo's title.</p>` +
     (ids.length > 1 ? `<div class="turn"><button class="prev" aria-label="Previous">‹</button><span>${n + 1} of ${ids.length} here</span><button class="next" aria-label="Next">›</button></div>` : "");
   box.querySelector(".close").addEventListener("click", () => { box.hidden = true; });
   box.querySelector(".prev")?.addEventListener("click", () => showPhotos(ids, (n + ids.length - 1) % ids.length));
@@ -465,6 +479,7 @@ async function load() {
     s.yearEnd = Number(s.year_end) > s.year ? Number(s.year_end) : s.year;
   }
   population = population.map((p) => [Number(p.year), Number(p.population)]);
+  story.files = await fetchJson("narration.json").catch(() => []);
   state.year = opened.year >= meta.firstYear && opened.year <= meta.lastYear ? opened.year : meta.firstYear;
   setupControls();
   render();
@@ -851,12 +866,12 @@ function render() {
   $("panel").classList.toggle("past", !today_());
   $("year-label").textContent = String(y);
   $("population-value").textContent = populationAt(state.year);
-  $("standing").textContent = `${countStanding(y).toLocaleString("en-CA")} of today's buildings standing`;
+  $("standing").textContent = `${countStanding(y).toLocaleString("en-CA")} of today's buildings are built`;
   const note = $("shoreline-note");
   note.hidden = !shore && model;
   note.classList.toggle("photo", !model);
   if (!model) note.textContent = `Aerial photograph of ${aerial.shown}, City of Toronto`;
-  else if (shore) note.textContent = `Historic shoreline of Lake Ontario (${shore})`;
+  else if (shore) note.textContent = `The lake shore as it was then (from: ${shore})`;
   if (document.activeElement !== $("slider") || state.playing) $("slider").value = String(state.year);
 }
 
@@ -978,7 +993,7 @@ function setupControls() {
   $("legend").innerHTML = meta.tiers.map((t) =>
     `<div><span class="swatch" style="background:rgb(${TIER_COLORS[t].join(",")})"></span>${TIER_LABELS[t]}` +
     `<span class="count">${(meta.countsByTier[t] ?? 0).toLocaleString("en-CA")}</span></div>`).join("") +
-    (lost ? `<div><span class="swatch" style="background:rgb(${LOST_COLOR.join(",")})"></span>Lost building, from fire insurance plans` +
+    (lost ? `<div><span class="swatch" style="background:rgb(${LOST_COLOR.join(",")})"></span>Gone today. Drawn on an old fire insurance map.` +
       `<span class="count">${lost.count.toLocaleString("en-CA")}</span></div>` : "");
 
   const span = meta.lastYear - meta.firstYear;
@@ -995,6 +1010,8 @@ function setupControls() {
     // start from the last stop at or before the year on screen
     let i = 0;
     while (i + 1 < stops.length && stops[i + 1].year <= state.year) i++;
+    // of several stops in the same year, the first
+    while (i > 0 && stops[i - 1].year === stops[i].year) i--;
     openStop(state.year >= meta.lastYear ? 0 : i, true);
   });
   $("story-close").addEventListener("click", closeStory);
@@ -1004,8 +1021,15 @@ function setupControls() {
     if (!story.playing) return openStop(story.index, true);
     // keep the run going so the year still arrives at the stop's year
     story.playing = false;
+    hush();
     map.stop();
     syncStoryButton();
+  });
+  $("story-sound").addEventListener("click", () => {
+    story.voice = !story.voice;
+    $("story-sound").setAttribute("aria-pressed", String(story.voice));
+    $("story-sound").textContent = story.voice ? "🔊" : "🔇";
+    if (!story.voice) hush(); else if (story.playing) openStop(story.index, true);
   });
   document.addEventListener("keydown", (e) => {
     if (e.target.tagName === "SELECT") return;
@@ -1033,6 +1057,7 @@ function openStop(i, autoplay) {
   const run = ++story.run;
   story.index = i;
   story.playing = autoplay;
+  if (autoplay) narrate(i); else hush();
   $("story").hidden = false;
   $("info").hidden = true;
   $("story-toggle").setAttribute("aria-pressed", "true");
@@ -1059,7 +1084,11 @@ function openStop(i, autoplay) {
         }
       }
     } else if (story.playing) {
-      const k = Math.min(1, (now - arrived) / read);
+      // read aloud, the stop lasts as long as the voice and a moment more
+      const sound = story.narration;
+      const k = !sound ? Math.min(1, (now - arrived) / read)
+        : sound.ended ? Math.min(1, 0.97 + (now - (sound.over ??= now)) / 30000)
+        : sound.duration ? Math.min(0.97, (sound.currentTime / sound.duration) * 0.97) : 0;
       if (s.yearEnd > s.year) {
         state.year = s.year + (s.yearEnd - s.year) * k;
         render();
@@ -1105,6 +1134,7 @@ function syncStoryButton() {
 // stops the card advancing and the year sweep; the card stays open
 function pauseStory() {
   story.run++;
+  hush();
   if (story.playing) map.stop();
   story.playing = false;
   syncStoryButton();
@@ -1123,11 +1153,11 @@ function showBuilding(info) {
   if (info.picked && info.layer?.id === "bikes") {
     const s = info.object;
     return showInfo(s.name, [["Bikes", s.ebikes ? `${s.bikes}, of them ${s.ebikes} electric` : s.bikes], ["Free docks", s.docks],
-      ["Source", "Bike Share Toronto, live counts"]]);
+      ["From", "Bike Share Toronto, counted right now"]]);
   }
   if (info.picked && info.layer?.id === "transit") {
     return showInfo(transitName(info.object), [["Route", info.object.route], ["Vehicle", info.object.id],
-      ["Source", "TTC live vehicle positions, up to 30 seconds old"]]);
+      ["From", "TTC live data. It can be up to 30 seconds old."]]);
   }
   if (info.picked && info.layer?.id.startsWith("landmark-")) {
     const fact = FACTS[info.object.key];
@@ -1146,11 +1176,11 @@ function showBuilding(info) {
     // a piece that takes over from the plan before, or hands over to the next, has no date of its own
     const known = lost.names?.[i];
     return showInfo(known?.name ?? "Lost building", [
-      [kept ? "Standing by" : "Built about", built],
-      [stays ? "Still standing in" : "Gone about", gone],
-      ["Outline from", `the ${lost.plans[plan]} plan`],
-      ["Material", brick ? "brick" : "wood"],
-      ["Source", `Goad's fire insurance plans. Outline and material are from the plan; ${known ? "the years are from the article" : estimated ? "a year here is an estimate" : "the years lie between plan years"}; the height is assumed.`],
+      [kept ? "Here by" : "Built about", built],
+      [stays ? "Still here in" : "Gone by about", gone],
+      ["Shape from", `the ${lost.plans[plan]} map`],
+      ["Made of", brick ? "brick" : "wood"],
+      ["How we know", `This building is gone. It was drawn on an old fire insurance map. Its shape and what it was made of come from that map. ${known ? "The years come from an article about it." : estimated ? "One of the years is a guess." : "The years fall between two of the maps."} The height is a guess.`],
       ...(known?.url ? [["More", `<a href="${escapeHtml(known.url)}" target="_blank" rel="noopener">article</a>`]] : []),
     ]);
   }
@@ -1158,7 +1188,7 @@ function showBuilding(info) {
   const named = names[i];
   const rows = [
     [tier === "estimate" ? "Built about" : "Built", years[i]],
-    ["Source", TIER_LABELS[tier]],
+    ["How we know", TIER_LABELS[tier]],
     ["Height", `${Math.round(heights[i] + (roofRise.get(i) ?? 0))} m`],
   ];
   if (named?.url) rows.push(["More", `<a href="${escapeHtml(named.url)}" target="_blank" rel="noopener">article</a>`]);
