@@ -70,7 +70,9 @@ const story = { index: -1, playing: false, run: 0, voice: true, narration: null,
 // A few stops have a sound under the voice (a battle, a fire, hooves): quiet, in a loop, fading in and out.
 const SOUND_LEVEL = 0.16;
 // some louder, some softer
-const SOUND_LEVELS = { fire: 0.22, storm: 0.13 };
+const SOUND_LEVELS = { fire: 0.22, storm: 0.13, lastpost: 0.3 };
+// played once, not in a loop
+const SOUND_ONCE = new Set(["lastpost"]);
 function fadeSound(sound, to, ms, then) {
   const from = sound.volume, start = performance.now();
   const step = (now) => {
@@ -102,7 +104,7 @@ function narrate(i) {
   sound.play().catch(() => { if (story.narration === sound) story.narration = null; });
   if (stops[i].sound) {
     const under = new Audio(`./audio/fx-${stops[i].sound}.mp3`);
-    under.loop = true;
+    under.loop = !SOUND_ONCE.has(stops[i].sound);
     under.volume = 0;
     story.sound = under;
     under.play().then(() => fadeSound(under, SOUND_LEVELS[stops[i].sound] ?? SOUND_LEVEL, 1500)).catch(() => { if (story.sound === under) story.sound = null; });

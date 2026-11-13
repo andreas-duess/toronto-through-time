@@ -6,7 +6,9 @@ A file is named after its text, so only stops whose text changed are made again.
 
 A few stops have a sound under the voice (the `sound` column of story.csv): web/public/audio/fx-<name>.mp3,
 made once with ElevenLabs' sound effects from the descriptions in SOUNDS, 20 seconds each, played
-quietly and in a loop by the page.
+quietly and in a loop by the page. One sound is a real recording, not made here: fx-lastpost.mp3, the Last
+Post played on a bugle (Sgt. Codie Lynn Williams, U.S. Marine Corps; public domain; Wikimedia Commons,
+"Last Post bugle call.ogg"), cut to 80 seconds.
 
 Run: uv run pipeline/narrate.py
 """
