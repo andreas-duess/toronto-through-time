@@ -27,6 +27,7 @@ import pandas as pd
 import shapely
 import shapely.affinity
 
+import pack
 import water
 from scipy.spatial import cKDTree
 
@@ -89,10 +90,13 @@ def load_buildings():
     # The model started from aerial photogrammetry; buildings added since come
     # from site plans and 3D models, so the source marks the newer ones.
     b["newer_source"] = b.BLDG_SRC != "Photogrammetrics"
+    # for the sloped roofs of houses (roofs()): the roof's average height and its highest point
+    lidar = b.HEIGHT_SRC == "Lidar-Derived"
+    b["roof_avg"], b["roof_peak"] = b.AVG_HEIGHT.where(lidar), b.MAX_HEIGHT.where(lidar)
     b = b[b.area >= 8].reset_index(drop=True)
     b = churches(b)
     log(f"buildings in old Toronto: {len(b):,} polygons")
-    return b[["base", "top", "area", "newer_source", "church", "part_of", "geometry"]], old
+    return b[["base", "top", "area", "newer_source", "church", "part_of", "roof_avg", "roof_peak", "geometry"]], old
 
 
 # ---------------------------------------------------------------- churches
@@ -590,8 +594,53 @@ def apply_sites(b):
 
 # ------------------------------------------------------------------- output
 
+def roofs(b):
+    """Sloped roofs for the houses: lowers their walls to the eaves and returns, per roof, the
+    building's number, the middle (lon, lat), and [length, width, eaves, rise (all m), direction
+    of the ridge (radians, anticlockwise from east)].
+
+    A house here is a low, small outline close to a rectangle, with heights from lidar. The
+    city's model gives its roof's average height and highest point. The roof drawn is a plain
+    gable over the rectangle around the outline, its ridge along the long side: the average
+    height is kept, the ridge is the highest point but no steeper than ROOF_PITCH (the highest
+    point is often a tree or a chimney). The shape and the direction of the ridge are drawn.
+    """
+    box = shapely.minimum_rotated_rectangle(b.geometry.values)
+    corners = shapely.get_coordinates(shapely.get_exterior_ring(box)).reshape(-1, 5, 2)
+    side_a, side_b = corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 1]
+    len_a, len_b = np.hypot(*side_a.T), np.hypot(*side_b.T)
+    along = np.where((len_a >= len_b)[:, None], side_a, side_b)
+    length, width = np.maximum(len_a, len_b), np.minimum(len_a, len_b)
+    # a highest point far above a house is a tree: a gentler roof then
+    pitch = np.where(b.roof_peak <= 16, ROOF_PITCH, 0.6 * ROOF_PITCH)
+    rise = np.minimum(2 * (b.roof_peak - b.roof_avg), pitch * width / 2)
+    eaves = b.roof_avg - rise / 2
+    house = ((b.base <= 0.5) & ~b.church & b.part_of.isna() & b.area.between(25, 450) & (b.roof_avg <= 12)
+             & (b.area / shapely.area(box) >= 0.72) & (width >= 3.5) & (rise >= 0.8) & (eaves >= 2.2)).to_numpy()
+    b.loc[house, "top"] = b.base[house] + eaves[house]
+    middle = gpd.GeoSeries(shapely.centroid(box[house]), crs=UTM).to_crs(4326)
+    info = np.column_stack([length[house], width[house], eaves[house], rise[house],
+                            np.arctan2(along[house, 1], along[house, 0]) % np.pi])
+    log(f"sloped roofs: {house.sum():,} of {len(b):,} outlines")
+    return np.flatnonzero(house), shapely.get_coordinates(middle.values), info
+
+
+ROOF_PITCH = 1.0     # rise over half the width, at most (45 degrees)
+
+
+def write_roofs(ids, middle, info):
+    """roofs.ids.pack (uint32), roofs.positions.pack (as the buildings' corners), roofs.info.pack
+    (uint16: length, width, eaves, rise in cm; direction of the ridge as 0-65535 for 0-180 degrees)."""
+    packed = np.column_stack([np.round(info[:, :4] * 100), np.round(info[:, 4] / np.pi * 65535)])
+    assert packed.min() >= 0 and packed.max() < 65536
+    pack.write("roofs.ids.pack", ids.astype("<u4"))
+    pack.write("roofs.positions.pack", pack.deltas(middle - ORIGIN))
+    pack.write("roofs.info.pack", packed.astype("<u2"))
+
+
 def write_buildings(b):
     b = b.sort_values("year").reset_index(drop=True)
+    write_roofs(*roofs(b))
     # outer ring only (courtyards are filled in), wound counter-clockwise for the renderer
     geom = shapely.simplify(b.geometry.to_crs(4326).values, 2e-6)
     rings = shapely.get_exterior_ring(shapely.orient_polygons(geom))

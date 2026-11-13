@@ -8,6 +8,7 @@ import { landmarkParts, FACTS } from "./landmarks.js";
 import { fetchPacked, fetchMetres, fetchStarts, fetchPositions } from "./pack.js";
 import { loadTrees, treeMesh, TREE_COLORS } from "./trees.js";
 import { SunEffect, today, sunAt, clock } from "./sun.js";
+import { loadRoofs, roofMesh } from "./roofs.js";
 
 const $ = (id) => document.getElementById(id);
 const DATA = "./data/";
@@ -168,6 +169,15 @@ const TREE_ZOOMS = [13, 14.5, 15.5];
 const TREE_LARGER = [1.5, 1.25, 1];
 const TREE_MESH = treeMesh();
 let trees = null;
+// Sloped roofs of the houses. They come in ROOF_SETS sets in order of their year. A set whose
+// houses are all older than NEW_SPAN is drawn as it is; the roofs of newer houses are drawn apart,
+// rising and losing their colour with the walls below them.
+const ROOF_MESH = roofMesh();
+const ROOF_COLOR = [176, 163, 150];
+const ROOF_SETS = 12;
+let roofs = null;
+// the rise of the roof on a building (m), for the height in its card
+const roofRise = new Map();
 let meta, buildings, years, heights, tiers, names, water, population, stops, streets, streetLabels, places, area, rail, sites, forest, parks, lost, addresses, landmarks;
 // buildings of the city's model that a hand-built landmark stands in for
 const replaced = new Set();
@@ -271,6 +281,8 @@ async function load() {
   render();
   if (map.isStyleLoaded()) addMapLayers(); else map.once("load", addMapLayers);
   $("loading").classList.add("done");
+  roofs = await loadRoofs(DATA).catch(() => null);
+  if (roofs) for (let i = 0; i < roofs.length; i++) roofRise.set(roofs.ids[i], roofs.size[i * 5 + 3]);
   // the trees come after everything else; the page does not wait for them
   loadTrees(DATA).then((t) => { trees = t; render(); }).catch(() => {});
 }
@@ -348,6 +360,57 @@ function landmarkLayers() {
     material: MATERIAL,
     pickable: true,
   }));
+}
+
+// Roofs [from, to) as one layer. `settled` roofs are full height and plain; the others follow the
+// year the way the walls do (time.js).
+function roofLayer(id, from, to, settled) {
+  const year = (i) => years[roofs.ids[from + i]];
+  const grown = (i) => {
+    const k = Math.min(1, Math.max(0, (state.year - year(i)) / RISE_YEARS));
+    return Math.max(0.02, k * k * (3 - 2 * k));
+  };
+  return new SimpleMeshLayer({
+    id,
+    beforeId: map.getLayer("places-city") ? "places-city" : undefined,
+    data: { length: to - from },
+    mesh: ROOF_MESH,
+    coordinateSystem: COORDINATE_SYSTEM.LNGLAT_OFFSETS,
+    coordinateOrigin: meta.origin,
+    getPosition: (_, { index, target }) => {
+      const k = from + index;
+      target[0] = roofs.positions[k * 2]; target[1] = roofs.positions[k * 2 + 1];
+      target[2] = roofs.size[k * 5 + 2] * (settled ? 1 : grown(index));
+      return target;
+    },
+    getScale: (_, { index }) => {
+      const k = (from + index) * 5;
+      return [roofs.size[k], roofs.size[k + 1], roofs.size[k + 3] * (settled ? 1 : grown(index))];
+    },
+    getOrientation: (_, { index }) => [0, roofs.size[(from + index) * 5 + 4], 0],
+    getColor: settled || state.quality ? ROOF_COLOR : (_, { index }) => {
+      const k = Math.min(1, Math.max(0, (state.year - year(index) - RISE_YEARS) / (NEW_SPAN - RISE_YEARS)));
+      return ROOF_COLOR.map((c, n) => c * (NEW_TINT[n] + (1 - NEW_TINT[n]) * k));
+    },
+    updateTriggers: settled ? {} : { getPosition: state.year, getScale: state.year, getColor: [state.year, state.quality] },
+    material: MATERIAL,
+  });
+}
+
+function roofLayers() {
+  // roofs are in order of their year: the first `standing` of them have their house
+  let lo = 0, standing = roofs.length;
+  while (lo < standing) { const mid = (lo + standing) >> 1; if (years[roofs.ids[mid]] <= state.year) lo = mid + 1; else standing = mid; }
+  const layers = [];
+  let from = 0;
+  for (let k = 0; k < ROOF_SETS; k++) {
+    const to = Math.floor((roofs.length * (k + 1)) / ROOF_SETS);
+    if (to > standing || years[roofs.ids[to - 1]] > state.year - NEW_SPAN) break;
+    layers.push(roofLayer(`roofs-${k}`, from, to, true));
+    from = to;
+  }
+  if (standing > from) layers.push(roofLayer("roofs-new", from, standing, false));
+  return layers;
 }
 
 // how many of the three sets of trees show
@@ -572,7 +635,7 @@ function render() {
   const y = Math.floor(state.year);
   const shore = updateWater(state.year);
   updateMap(state.year);
-  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(lost ? lostLayers() : []), ...buildingLayers(), ...landmarkLayers(), ...(trees ? treeLayers() : [])] });
+  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(lost ? lostLayers() : []), ...buildingLayers(), ...(roofs ? roofLayers() : []), ...landmarkLayers(), ...(trees ? treeLayers() : [])] });
   treesOn = treeSets();
   drawn = drawnKey();
   writeHash();
@@ -837,7 +900,7 @@ function showBuilding(info) {
   const rows = [
     [tier === "estimate" ? "Built about" : "Built", years[i]],
     ["Source", TIER_LABELS[tier]],
-    ["Height", `${Math.round(heights[i])} m`],
+    ["Height", `${Math.round(heights[i] + (roofRise.get(i) ?? 0))} m`],
   ];
   if (named?.url) rows.push(["More", `<a href="${escapeHtml(named.url)}" target="_blank" rel="noopener">article</a>`]);
   // the name if it has one, otherwise the street address
