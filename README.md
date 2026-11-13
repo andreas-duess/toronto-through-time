@@ -101,6 +101,6 @@ old Trinity College), `island.csv` (the research behind the Island rows). `place
 
 ## Online
 
-Live at https://torontothroughtime.com (https://toronto.duess.com, the first address, redirects there:
+Live at https://torontothroughtime.com (https://toronto.duess.com, the first address, and the www form redirect there:
 `redirect/`, deployed with `cd redirect && npx wrangler deploy`), a static site on Cloudflare Workers (`web/wrangler.jsonc`).
 To publish the current state: `cd web && npm run deploy` (builds, then uploads `web/dist`).

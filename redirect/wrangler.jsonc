@@ -2,5 +2,8 @@
   "name": "toronto-through-time-redirect",
   "compatibility_date": "2026-11-10",
   "main": "worker.js",
-  "routes": [{ "pattern": "toronto.duess.com", "custom_domain": true }]
+  "routes": [
+    { "pattern": "toronto.duess.com", "custom_domain": true },
+    { "pattern": "www.torontothroughtime.com", "custom_domain": true }
+  ]
 }
