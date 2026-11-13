@@ -216,9 +216,9 @@ function runTransit() {
 document.addEventListener("visibilitychange", () => { if (meta) runTransit(); });
 
 // Bike Share stations, in today's year: a post per station, taller the more bikes it has now,
-// grey when it has none and amber when it has no free dock.
-const BIKE_ZOOM = 13.5;
-const BIKE_COLORS = { some: [0, 148, 92], none: [165, 165, 165], full: [226, 150, 0] };
+// grey when it has none and dark when it has no free dock.
+const BIKE_ZOOM = 13;
+const BIKE_COLORS = { some: [255, 138, 0], none: [165, 165, 165], full: [120, 62, 0] };
 const today_ = () => Boolean(meta) && state.year >= meta.lastYear - 0.05;
 const bikesOn = () => today_() && map.getZoom() >= BIKE_ZOOM;
 function bikeLayer() {
@@ -229,7 +229,7 @@ function bikeLayer() {
     data: bikeStations(),
     mesh: BOX_MESH,
     getPosition: (s) => s.position,
-    getScale: (s) => [2.4, 2.4, 3 + Math.min(40, s.bikes) * 0.4],
+    getScale: (s) => [4, 4, 6 + Math.min(40, s.bikes) * 0.5],
     getColor: (s) => (s.bikes === 0 ? BIKE_COLORS.none : s.docks === 0 ? BIKE_COLORS.full : BIKE_COLORS.some),
     sizeScale: larger,
     material: MATERIAL,
