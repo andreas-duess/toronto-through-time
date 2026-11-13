@@ -40,6 +40,9 @@ AREAS = {
     "island": ((-79.405, 43.609, -79.348, 43.636), [1913, 1924]),
     # the old Trinity College on Queen Street West, now Trinity Bellwoods Park
     "trinity": ((-79.4195, 43.6440, -79.4105, 43.6515), [1889, 1903, 1913, 1924]),
+    # Parkdale and the streets between it and the district: Bathurst Street to Roncesvalles
+    # Avenue, the lake to Dundas Street. A village of its own until 1889.
+    "parkdale": ((-79.452, 43.628, -79.412, 43.655), [1889, 1903, 1913, 1924]),
 }
 Z = 18            # about 0.43 m of ground per pixel here
 CHUNK = 6         # tiles per side worked on at once

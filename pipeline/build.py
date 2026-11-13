@@ -96,7 +96,7 @@ def load_buildings():
     b = b[b.area >= 8].reset_index(drop=True)
     b = churches(shapes(b))
     log(f"buildings in old Toronto: {len(b):,} polygons")
-    return b[["base", "top", "area", "newer_source", "church", "part_of", "roof_avg", "roof_peak", "geometry"]], old
+    return b[["base", "top", "area", "newer_source", "church", "part_of", "shaped", "roof_avg", "roof_peak", "geometry"]], old
 
 
 # ---------------------------------------------------------------- shapes
@@ -277,7 +277,8 @@ def first_seen(b, old):
         top = np.maximum(s.MAX_HEIGHT, s.AVG_HEIGHT).values
         bi, si = shapely.STRtree(geom).query(b.geometry.values, predicate="intersects")
         # a shorter building on the same lot is the one that was replaced
-        same = top[si] >= 0.6 * b.top.values[bi]
+        # (a block of a building's real shape can be much lower than the outline it came from)
+        same = (top[si] >= 0.6 * b.top.values[bi]) | b.shaped.values[bi].astype(bool)
         bi, si = bi[same], si[same]
         inter = shapely.area(shapely.intersection(b.geometry.values[bi], geom[si]))
         covered = np.bincount(bi, weights=inter, minlength=len(b)) / b.area.values

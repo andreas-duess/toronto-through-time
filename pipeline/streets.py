@@ -372,7 +372,7 @@ def write_sites():
     """Outlines of the sites in data/manual/sites.csv (the ramparts of Fort York)."""
     feats = [{"type": "Feature", "geometry": json.loads(shapely.to_geojson(shapely.from_wkt(r["wkt"]))),
               "properties": {"name": r["name"], "kind": r["kind"], "y": int(r["year"])}}
-             for r in csv.DictReader((MANUAL / "sites.csv").open())]
+             for r in csv.DictReader((MANUAL / "sites.csv").open()) if r["kind"]]   # only those with something to draw
     (OUT / "sites.json").write_text(json.dumps({"type": "FeatureCollection", "features": feats}))
 
 
