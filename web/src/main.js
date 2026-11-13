@@ -378,8 +378,8 @@ function updateAerial() {
   let year = null, nearest = null;
   for (const [y] of AERIALS) if (nearest === null || Math.abs(y - state.year) < Math.abs(nearest - state.year)) nearest = y;
   if (aerial.on && state.year >= AERIALS[0][0]) year = nearest;
-  $("aerial-desc").textContent = state.year < AERIALS[0][0] ? `Aerial photography of the city, starting ${AERIALS[0][0]}`
-    : year ? `Showing the survey of ${year}` : `Aerial photography of the city: the survey of ${nearest}`;
+  // which survey it is, said in the explanation behind the "i"
+  $("aerial-year").textContent = state.year < AERIALS[0][0] ? "" : `For ${Math.floor(state.year)}, the photo is from ${year ?? nearest}.`;
   if (year === aerial.shown) return;
   aerial.shown = year;
   for (const [y] of AERIALS) if (map.getLayer(`aerial-${y}`)) map.setLayoutProperty(`aerial-${y}`, "visibility", "none");
