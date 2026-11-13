@@ -599,19 +599,6 @@ def apply_names(b, ap):
     cen = gpd.GeoDataFrame(geometry=b.geometry.centroid, crs=UTM)
     boxed = gpd.sjoin(cen, boxes, predicate="within").groupby(level=0).osm_name.first()
     b["name"] = b.name.fillna(b.index.to_series().map(boxed))
-    # ... and where one part of a named building has a year on record and another only a guess,
-    # the guess gives way to the record. (An addition built later is then dated too early.)
-    # Only within 200 m: a name can stand for a chain of shops across the city.
-    cx, cy = b.geometry.centroid.x, b.geometry.centroid.y
-    rec = b[b.name.notna() & (b.tier < ESTIMATE)]
-    rec = pd.DataFrame({"name": rec.name, "rx": cx[rec.index], "ry": cy[rec.index], "ryear": rec.year})
-    gue = b[b.name.notna() & (b.tier == ESTIMATE)]
-    pairs = pd.DataFrame({"i": gue.index, "name": gue.name, "x": cx[gue.index], "y": cy[gue.index]}).merge(rec, on="name")
-    pairs = pairs[np.hypot(pairs.x - pairs.rx, pairs.y - pairs.ry) <= 200]
-    near = pairs.groupby("i").ryear.min()
-    guessed = b.index.isin(near.index)
-    b.loc[near.index, "year"] = near.values
-    log(f"  {int(guessed.sum()):,} parts of named buildings take the year of the part on record")
     # One building, two dates: an article dates the Eaton Centre to 1977, and a heritage listing at
     # an address inside it (an old front kept in the new building) dates one of its blocks to 1861.
     # Within one building, a part dated earlier than the building's landmark year by a lesser
@@ -622,6 +609,20 @@ def apply_names(b, ap):
     b.loc[early, "year"] = of_group[early]
     b.loc[early, "tier"] = 0
     log(f"  {int(early.sum()):,} parts dated before their own building's landmark year moved to it")
+    # ... and where one part of a named building has a year on record and another only a guess,
+    # the guess gives way to the record. (An addition built later is then dated too early.)
+    # Only within 200 m: a name can stand for a chain of shops across the city.
+    cx, cy = b.geometry.centroid.x, b.geometry.centroid.y
+    rec = b[b.name.notna() & (b.tier < ESTIMATE)]
+    rec = pd.DataFrame({"name": rec.name, "rx": cx[rec.index], "ry": cy[rec.index], "ryear": rec.year, "rtier": rec.tier})
+    gue = b[b.name.notna() & (b.tier == ESTIMATE)]
+    pairs = pd.DataFrame({"i": gue.index, "name": gue.name, "x": cx[gue.index], "y": cy[gue.index]}).merge(rec, on="name")
+    pairs = pairs[np.hypot(pairs.x - pairs.rx, pairs.y - pairs.ry) <= 200]
+    # (of several parts on record, the one with the best source, then the earliest)
+    near = pairs.sort_values(["rtier", "ryear"]).groupby("i").ryear.first()
+    guessed = b.index.isin(near.index)
+    b.loc[near.index, "year"] = near.values
+    log(f"  {int(guessed.sum()):,} parts of named buildings take the year of the part on record")
     log(f"  names: {before:,} from the registers, {b.name.notna().sum() - before:,} more from OpenStreetMap")
 
 
