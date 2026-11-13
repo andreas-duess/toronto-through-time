@@ -25,6 +25,7 @@ SOUNDS = {
     "fire": "A large city fire at night: timber crackling and roaring flames, distant men shouting, a fire bell ringing far away, no music",
     "train": "A steam locomotive starting off and gathering speed: loud rhythmic chuff chuff chuff of the engine getting faster, wheels clacking on rails, one long steam whistle, no continuous hiss, no music",
     "fair": "A busy outdoor country fair in the 1870s: a happy crowd milling about, hand bells ringing, a barker calling out, farm animals in the distance, no music, no modern sounds",
+    "boo": "A room of about thirty men in a council chamber in the 1890s booing, jeering and grumbling angrily, a gavel banging, no music, no modern sounds",
     "toast": "A room full of people in a tavern in the 1860s cheering together and clinking glasses, a hearty cheer, laughter, no music, no modern sounds",
     "storm": "A violent storm on a lake shore: strong wind and heavy waves breaking on sand, no thunder, no music",
     "cheer": "A crowd of a few hundred people cheering and applauding outdoors in a town square in the 1830s, hats in the air, no music, no modern sounds",

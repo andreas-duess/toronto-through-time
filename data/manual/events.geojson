@@ -454,6 +454,194 @@
      43.6524
     ]
    }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "village",
+    "label": "Yorkville\njoins Toronto in 1883",
+    "from": 1883,
+    "to": 1891
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -79.3945,
+       43.6688
+      ],
+      [
+       -79.3862,
+       43.6705
+      ],
+      [
+       -79.3878,
+       43.674
+      ],
+      [
+       -79.3963,
+       43.6748
+      ],
+      [
+       -79.3945,
+       43.6688
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "village",
+    "label": "Brockton\njoins Toronto in 1884",
+    "from": 1884,
+    "to": 1891
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -79.452,
+       43.6462
+      ],
+      [
+       -79.4395,
+       43.6462
+      ],
+      [
+       -79.43,
+       43.6425
+      ],
+      [
+       -79.4355,
+       43.66
+      ],
+      [
+       -79.4575,
+       43.6548
+      ],
+      [
+       -79.452,
+       43.6462
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "village",
+    "label": "Riverside and Leslieville\njoins Toronto in 1884",
+    "from": 1884,
+    "to": 1891
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -79.3525,
+       43.6583
+      ],
+      [
+       -79.3288,
+       43.6632
+      ],
+      [
+       -79.3338,
+       43.6815
+      ],
+      [
+       -79.359,
+       43.6762
+      ],
+      [
+       -79.3525,
+       43.6583
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "village",
+    "label": "Seaton Village\njoins Toronto in 1888",
+    "from": 1888,
+    "to": 1891
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -79.4183,
+       43.6643
+      ],
+      [
+       -79.4112,
+       43.6658
+      ],
+      [
+       -79.4142,
+       43.6742
+      ],
+      [
+       -79.4216,
+       43.6728
+      ],
+      [
+       -79.4183,
+       43.6643
+      ]
+     ]
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "kind": "village",
+    "label": "Parkdale\njoins Toronto in 1889",
+    "from": 1889,
+    "to": 1891
+   },
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       -79.4262,
+       43.633
+      ],
+      [
+       -79.429,
+       43.6418
+      ],
+      [
+       -79.4395,
+       43.6462
+      ],
+      [
+       -79.4502,
+       43.6452
+      ],
+      [
+       -79.4465,
+       43.6372
+      ],
+      [
+       -79.4262,
+       43.633
+      ]
+     ]
+    ]
+   }
   }
  ]
 }
