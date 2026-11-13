@@ -1196,7 +1196,8 @@ function openStop(i, autoplay) {
         : sound.ended ? Math.min(1, 0.97 + (now - (sound.over ??= now)) / 30000)
         : sound.duration ? Math.min(0.97, (sound.currentTime / sound.duration) * 0.97) : 0;
       if (s.yearEnd > s.year) {
-        state.year = s.year + (s.yearEnd - s.year) * k;
+        // the years run out three quarters of the way through, so that what the voice names last is on the map by then
+        state.year = s.year + (s.yearEnd - s.year) * Math.min(1, k / 0.75);
         render();
       }
       $("story-progress").firstElementChild.style.width = `${k * 100}%`;
