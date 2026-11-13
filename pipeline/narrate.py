@@ -25,6 +25,7 @@ SOUNDS = {
     "fire": "A large city fire at night: timber crackling and roaring flames, distant men shouting, a fire bell ringing far away, no music",
     "train": "A small steam locomotive of the 1850s pulling away slowly: chuffing, hissing steam, one whistle, no music",
     "storm": "A violent storm on a lake shore: strong wind and heavy waves breaking on sand, no thunder, no music",
+    "cheer": "A crowd of a few hundred people cheering and applauding outdoors in a town square in the 1830s, hats in the air, no music, no modern sounds",
     "hooves": "Horses' hooves walking on a cobbled city street pulling a streetcar on rails, a small bell now and then, no voices, no music",
 }
 
