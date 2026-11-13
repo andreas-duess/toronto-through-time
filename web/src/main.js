@@ -859,6 +859,20 @@ function addMapLayers() {
   });
   for (const k of Object.keys(opacities)) delete opacities[k];
 
+  // Today's airports (pipeline/airports.py): Pearson, west of the old city, and the Island airport.
+  // Widths are in metres on the ground.
+  const metresWide = (m) => ["interpolate", ["exponential", 2], ["zoom"], 9, (m * 2 ** 9) / 56600, 19, (m * 2 ** 19) / 56600];
+  map.addSource("airports", { type: "geojson", data: DATA + "airports.json" });
+  map.addLayer({ id: "airport-apron", type: "fill", source: "airports", filter: ["==", ["get", "kind"], "apron"], paint: { "fill-color": "#dcd9d2" } });
+  map.addLayer({ id: "airport-taxiway", type: "line", source: "airports", filter: ["==", ["get", "kind"], "taxiway"],
+    layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#c9c6bf", "line-width": metresWide(23) } });
+  map.addLayer({ id: "airport-runway", type: "line", source: "airports", filter: ["==", ["get", "kind"], "runway"],
+    paint: { "line-color": "#8f8d89", "line-width": metresWide(60) } });
+  map.addLayer({ id: "airport-terminal", type: "fill", source: "airports", filter: ["==", ["get", "kind"], "terminal"], paint: { "fill-color": "#b3aa9b" } });
+  map.addLayer({ id: "airport-name", type: "symbol", source: "airports", filter: ["all", ["==", ["get", "kind"], "terminal"], ["!=", ["get", "name"], ""]], minzoom: 12,
+    layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"], "text-size": 12 },
+    paint: { "text-color": "#52525b", "text-halo-color": "#ffffff", "text-halo-width": 1.5 } });
+
   map.addSource("area", { type: "geojson", data: area });
   map.addLayer({ id: "area", type: "line", source: "area",
     paint: { "line-color": "#a79f8c", "line-width": 1, "line-dasharray": [3, 3] } });
@@ -972,6 +986,10 @@ function updateMap(year) {
     if (!map.getLayer(id)) continue;
     const kinds = { "events-fire": ["fire"], "events-fire-edge": ["fire"], "events-move": ["move"], "events-move-label": ["move"], "events-point": ["point"], "events-label": ["point", "fire", "village", "outline"], "events-outline": ["outline"], "events-village": ["village"], "events-village-edge": ["village"] }[id];
     map.setFilter(id, ["all", ["in", ["get", "kind"], ["literal", kinds]], ["<=", ["get", "from"], y], [">", ["get", "to"], y]]);
+  }
+  // the airports as they are today, in today's year
+  for (const id of ["airport-apron", "airport-taxiway", "airport-runway", "airport-terminal", "airport-name"]) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", y >= meta.lastYear ? "visible" : "none");
   }
   const running = ["all", built, [">", ["get", "end"], y]];
   map.setFilter("rail", running);
