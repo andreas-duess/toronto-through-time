@@ -197,7 +197,7 @@ map.on("moveend", writeHash);
 // the trees come and go with the zoom
 let treesOn = 0;
 let bikesShown = false;
-map.on("zoom", () => { if (meta && (treeSets() !== treesOn || transitOn() || bikesOn() || bikesShown || photosShow.on)) render(); });
+map.on("zoom", () => { if (meta && (treeSets() !== treesOn || transitOn() || bikesOn() || bikesShown || photosShow.on || poppiesOn())) render(); });
 // and so do the batches of buildings, with the view
 let drawn = "";
 map.on("move", () => { if (buildings && drawnKey() !== drawn) render(); });
@@ -353,6 +353,37 @@ function updateAerial() {
     // over the streets and the other photographs, under the names
     map.moveLayer(id, "street-labels");
   }
+}
+
+// Poppies: the homes of Torontonians who died in the Second World War (pipeline/poppies.py), shown
+// in the years of the war and fading out after it.
+const POPPY_YEARS = [1939, 1947];
+const POPPY_ICON = (() => {
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const g = c.getContext("2d");
+  g.fillStyle = "#c81e1e";
+  for (const [x, y] of [[32, 19], [45, 32], [32, 45], [19, 32]]) { g.beginPath(); g.arc(x, y, 14, 0, 6.3); g.fill(); }
+  g.beginPath(); g.arc(32, 32, 7, 0, 6.3); g.fillStyle = "#18181b"; g.fill();
+  return c.toDataURL();
+})();
+let poppies = null;
+const poppiesOn = () => poppies && state.year >= POPPY_YEARS[0] && state.year < POPPY_YEARS[1];
+function poppyLayer() {
+  return new IconLayer({
+    id: "poppies",
+    beforeId: map.getLayer("places-city") ? "places-city" : undefined,
+    data: poppies,
+    iconAtlas: POPPY_ICON,
+    iconMapping: { poppy: { x: 0, y: 0, width: 64, height: 64 } },
+    getIcon: () => "poppy",
+    getPosition: (p) => [p[0], p[1], 0],
+    getSize: Math.min(22, Math.max(7, 7 + (map.getZoom() - 11) * 3)),
+    sizeUnits: "pixels",
+    opacity: Math.min(1, POPPY_YEARS[1] - state.year),
+    parameters: { depthCompare: "always", depthWriteEnabled: false },
+    pickable: true,
+  });
 }
 
 // Archive photographs taken around the year on the slider, as camera pins (the Photos button).
@@ -530,6 +561,7 @@ async function load() {
   population = population.map((p) => [Number(p.year), Number(p.population)]);
   story.files = await fetchJson("narration.json").catch(() => []);
   events = await fetchJson("events.json").catch(() => null);
+  fetchJson("poppies.json").then((p) => { poppies = p; render(); }).catch(() => {});
   state.year = opened.year >= meta.firstYear && opened.year <= meta.lastYear ? opened.year : meta.firstYear;
   setupControls();
   render();
@@ -963,7 +995,7 @@ function render() {
   fadeEvents(state.year);
   updateAerial();
   const model = aerial.shown === null;
-  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(model && lost ? lostLayers() : []), ...(model ? buildingLayers() : []), ...(model && roofs ? roofLayers() : []), ...(model ? landmarkLayers() : []), ...(model && trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(photosOn() ? [photoLayer()] : []), ...(transitOn() ? [transitLayer()] : [])] });
+  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(model && lost ? lostLayers() : []), ...(model ? buildingLayers() : []), ...(model && roofs ? roofLayers() : []), ...(model ? landmarkLayers() : []), ...(model && trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(poppiesOn() ? [poppyLayer()] : []), ...(photosOn() ? [photoLayer()] : []), ...(transitOn() ? [transitLayer()] : [])] });
   runTransit();
   watchBikes(bikesOn(), render);
   treesOn = treeSets();
@@ -1258,6 +1290,10 @@ function closeStory() {
 
 function showBuilding(info) {
   if (info.picked && info.layer?.id === "photos") return showPhotos(info.object.ids, 0);
+  if (info.picked && info.layer?.id === "poppies") {
+    return showInfo(info.object[2], [["", "Someone from this home died in the Second World War."],
+      ["How we know", `From a published map of Toronto's war dead, which lists home addresses.${info.object[3] ? " This house number is not there today, so the poppy is at the nearest one." : ""}`]]);
+  }
   if (info.picked && info.layer?.id === "bikes") {
     const s = info.object;
     return showInfo(s.name, [["Bikes", s.ebikes ? `${s.bikes}, of them ${s.ebikes} electric` : s.bikes], ["Free docks", s.docks],
