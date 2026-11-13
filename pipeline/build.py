@@ -580,6 +580,14 @@ def apply_names(b, ap):
     b["name"] = b.name.fillna(b.index.to_series().map(own)).fillna(b.index.to_series().map(on))
     # every part of a named building carries the name
     b["name"] = b.name.fillna(b.groupby("group").name.transform("first"))
+    a = gpd.GeoDataFrame(ap[["address"]], geometry=gpd.points_from_xy(ap.lon, ap.lat), crs=4326).to_crs(UTM)
+    inside = gpd.sjoin(a, b[["geometry"]], predicate="within").groupby("index_right").address.first()
+    b["address"] = b.index.to_series().map(inside)
+    b["address"] = b.address.fillna(b.groupby("group").address.transform("first"))
+    log(f"  street address for {b.address.notna().sum():,} of {len(b):,}")
+    # outlines at the same street address as a named one are the same place
+    at = b[b.name.notna() & b.address.notna()].groupby("address").name.first()
+    b["name"] = b.name.fillna(b.address.map(at))
     # A school or a hospital is often several outlines in the City's model and one building in
     # OpenStreetMap. Outlines without a name inside the box around a named building take its
     # name (not for boxes over 1.5 ha, which take in the neighbours).
@@ -604,13 +612,18 @@ def apply_names(b, ap):
     guessed = b.index.isin(near.index)
     b.loc[near.index, "year"] = near.values
     log(f"  {int(guessed.sum()):,} parts of named buildings take the year of the part on record")
+    # One building, two dates: an article dates the Eaton Centre to 1977, and a heritage listing at
+    # an address inside it (an old front kept in the new building) dates one of its blocks to 1861.
+    # Within one building, a part dated earlier than the building's landmark year by a lesser
+    # source takes the landmark year.
+    landmark = b[b.tier == 0].groupby("group").year.min()
+    of_group = b.group.map(landmark)
+    early = (b.tier > 0) & of_group.notna() & (b.year < of_group)
+    b.loc[early, "year"] = of_group[early]
+    b.loc[early, "tier"] = 0
+    log(f"  {int(early.sum()):,} parts dated before their own building's landmark year moved to it")
     log(f"  names: {before:,} from the registers, {b.name.notna().sum() - before:,} more from OpenStreetMap")
 
-    a = gpd.GeoDataFrame(ap[["address"]], geometry=gpd.points_from_xy(ap.lon, ap.lat), crs=4326).to_crs(UTM)
-    inside = gpd.sjoin(a, b[["geometry"]], predicate="within").groupby("index_right").address.first()
-    b["address"] = b.index.to_series().map(inside)
-    b["address"] = b.address.fillna(b.groupby("group").address.transform("first"))
-    log(f"  street address for {b.address.notna().sum():,} of {len(b):,}")
 
 
 def apply_plans(b):
