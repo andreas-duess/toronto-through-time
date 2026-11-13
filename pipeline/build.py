@@ -577,6 +577,8 @@ def apply_names(b, ap):
     on = gpd.sjoin(cen, grounds, predicate="within").groupby(level=0).osm_name.first()
 
     before = b.name.notna().sum()
+    # (a Wikidata item without an English name comes with its number for a name: no name then)
+    b.loc[b.name.astype(str).str.fullmatch(r"Q\d+"), ["name", "url"]] = [None, None]
     b["name"] = b.name.fillna(b.index.to_series().map(own)).fillna(b.index.to_series().map(on))
     # every part of a named building carries the name
     b["name"] = b.name.fillna(b.groupby("group").name.transform("first"))
@@ -598,7 +600,9 @@ def apply_names(b, ap):
     boxes = boxes[boxes.area <= 15000]
     cen = gpd.GeoDataFrame(geometry=b.geometry.centroid, crs=UTM)
     boxed = gpd.sjoin(cen, boxes, predicate="within").groupby(level=0).osm_name.first()
-    b["name"] = b.name.fillna(b.index.to_series().map(boxed))
+    # (not the parts of a tower: beside an old bank they belong to the skyscraper next door)
+    low = (b.top - b.base) <= 100
+    b["name"] = b.name.fillna(b.index.to_series().map(boxed).where(low))
     # One building, two dates: an article dates the Eaton Centre to 1977, and a heritage listing at
     # an address inside it (an old front kept in the new building) dates one of its blocks to 1861.
     # Within one building, a part dated earlier than the building's landmark year by a lesser
@@ -620,6 +624,8 @@ def apply_names(b, ap):
     pairs = pairs[np.hypot(pairs.x - pairs.rx, pairs.y - pairs.ry) <= 200]
     # (of several parts on record, the one with the best source, then the earliest)
     near = pairs.sort_values(["rtier", "ryear"]).groupby("i").ryear.first()
+    # ... unless that would put a tower in a year too early for its height
+    near = near[~too_tall_for_year(near, (b.top - b.base)[near.index])]
     guessed = b.index.isin(near.index)
     b.loc[near.index, "year"] = near.values
     log(f"  {int(guessed.sum()):,} parts of named buildings take the year of the part on record")

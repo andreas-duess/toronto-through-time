@@ -168,7 +168,7 @@ const map = new maplibregl.Map({
   maxPitch: 75,
   // smooth edges on the buildings
   canvasContextAttributes: { antialias: true },
-  minZoom: 9,
+  minZoom: 8.5,
   maxZoom: 19,
 });
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
@@ -826,7 +826,7 @@ function addMapLayers() {
   // Battles and fires, drawn in their years (data/manual/events.geojson): the ground a fire burned,
   // the moves of a battle, and the places named in it.
   if (events) {
-    const side = (american, british, other) => ["match", ["get", "side"], "american", american, "british", british, other];
+    const side = (american, british, other) => ["match", ["get", "side"], "american", american, "british", british, "plan", "#18181b", "subway", "#a16207", other];
     map.addSource("events", { type: "geojson", data: events });
     map.addLayer({ id: "events-fire", type: "fill", source: "events", filter: ["==", ["get", "kind"], "fire"],
       paint: { "fill-color": "#e2571c", "fill-opacity": 0.42 } });
@@ -836,6 +836,8 @@ function addMapLayers() {
       paint: { "fill-color": "#1d4ed8", "fill-opacity": 0.16 } });
     map.addLayer({ id: "events-village-edge", type: "line", source: "events", filter: ["==", ["get", "kind"], "village"],
       paint: { "line-color": "#1e40af", "line-width": 2, "line-dasharray": [2, 1.5] } });
+    map.addLayer({ id: "events-outline", type: "line", source: "events", filter: ["==", ["get", "kind"], "outline"],
+      paint: { "line-color": "#18181b", "line-width": 2.5 } });
     map.addLayer({ id: "events-move", type: "line", source: "events", filter: ["==", ["get", "kind"], "move"],
       layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": side("#1d4ed8", "#b91c1c", "#444"), "line-width": 3.5, "line-dasharray": [1.5, 1.5] } });
@@ -851,20 +853,37 @@ function addMapLayers() {
   }
   // the words of the battles and fires go on top of everything
   if (events) {
-    const side = (american, british, other) => ["match", ["get", "side"], "american", american, "british", british, other];
+    const side = (american, british, other) => ["match", ["get", "side"], "american", american, "british", british, "plan", "#18181b", "subway", "#a16207", other];
     map.addLayer({ id: "events-move-label", type: "symbol", source: "events", filter: ["==", ["get", "kind"], "move"],
       layout: { "symbol-placement": "line", "text-field": ["concat", ["get", "label"], "  ›››"], "text-font": ["Noto Sans Bold"], "text-size": 12.5,
         "symbol-spacing": 420, "text-offset": [0, -0.9] },
       paint: { "text-color": side("#1d4ed8", "#b91c1c", "#444"), "text-halo-color": "#ffffff", "text-halo-width": 1.8 } });
     map.addLayer({ id: "events-point", type: "circle", source: "events", filter: ["==", ["get", "kind"], "point"],
       paint: { "circle-radius": 6, "circle-color": side("#1d4ed8", "#b91c1c", "#e2571c"), "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
-    map.addLayer({ id: "events-label", type: "symbol", source: "events", filter: ["in", ["get", "kind"], ["literal", ["point", "fire", "village"]]],
+    map.addLayer({ id: "events-label", type: "symbol", source: "events", filter: ["in", ["get", "kind"], ["literal", ["point", "fire", "village", "outline"]]],
       layout: { "text-field": ["get", "label"], "text-font": ["Noto Sans Bold"], "text-size": 12.5, "text-anchor": "top", "text-offset": [0, 0.8],
         "text-max-width": 14, "text-allow-overlap": true },
-      paint: { "text-color": ["case", ["==", ["get", "kind"], "village"], "#1e40af", side("#1d4ed8", "#b91c1c", "#9a330b")], "text-halo-color": "#ffffff", "text-halo-width": 2 } });
+      paint: { "text-color": ["case", ["==", ["get", "kind"], "village"], "#1e40af", ["==", ["get", "kind"], "outline"], "#18181b", side("#1d4ed8", "#b91c1c", "#9a330b")], "text-halo-color": "#ffffff", "text-halo-width": 2 } });
   }
   mapYear = null;
   render();
+}
+
+
+// What is drawn for a battle, a fire or a plan fades out over its last year.
+let eventsFade = "";
+function fadeEvents(year) {
+  if (!map.getLayer("events-move")) return;
+  const key = year.toFixed(1);
+  if (key === eventsFade) return;
+  eventsFade = key;
+  const left = ["max", 0, ["min", 1, ["-", ["get", "to"], Number(key)]]];
+  map.setPaintProperty("events-fire", "fill-opacity", ["*", 0.42, left]);
+  map.setPaintProperty("events-village", "fill-opacity", ["*", 0.16, left]);
+  for (const id of ["events-outline", "events-fire-edge", "events-village-edge", "events-move"]) map.setPaintProperty(id, "line-opacity", left);
+  map.setPaintProperty("events-point", "circle-opacity", left);
+  map.setPaintProperty("events-point", "circle-stroke-opacity", left);
+  for (const id of ["events-move-label", "events-label"]) map.setPaintProperty(id, "text-opacity", left);
 }
 
 // The streets and names of a year. Filters are only set when the whole year changes.
@@ -880,9 +899,9 @@ function updateMap(year) {
   map.setFilter("sites", built);
   map.setFilter("sites-edge", built);
   // battles and fires: in their years only
-  for (const id of ["events-fire", "events-fire-edge", "events-village", "events-village-edge", "events-move", "events-move-label", "events-point", "events-label"]) {
+  for (const id of ["events-outline", "events-fire", "events-fire-edge", "events-village", "events-village-edge", "events-move", "events-move-label", "events-point", "events-label"]) {
     if (!map.getLayer(id)) continue;
-    const kinds = { "events-fire": ["fire"], "events-fire-edge": ["fire"], "events-move": ["move"], "events-move-label": ["move"], "events-point": ["point"], "events-label": ["point", "fire", "village"], "events-village": ["village"], "events-village-edge": ["village"] }[id];
+    const kinds = { "events-fire": ["fire"], "events-fire-edge": ["fire"], "events-move": ["move"], "events-move-label": ["move"], "events-point": ["point"], "events-label": ["point", "fire", "village", "outline"], "events-outline": ["outline"], "events-village": ["village"], "events-village-edge": ["village"] }[id];
     map.setFilter(id, ["all", ["in", ["get", "kind"], ["literal", kinds]], ["<=", ["get", "from"], y], [">", ["get", "to"], y]]);
   }
   const running = ["all", built, [">", ["get", "end"], y]];
@@ -926,6 +945,7 @@ function render() {
   showWeather();
   const shore = updateWater(state.year);
   updateMap(state.year);
+  fadeEvents(state.year);
   updateAerial();
   const model = aerial.shown === null;
   overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(model && lost ? lostLayers() : []), ...(model ? buildingLayers() : []), ...(model && roofs ? roofLayers() : []), ...(model ? landmarkLayers() : []), ...(model && trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(photosOn() ? [photoLayer()] : []), ...(transitOn() ? [transitLayer()] : [])] });
