@@ -3,7 +3,7 @@
   "compatibility_date": "2026-11-10",
   "main": "worker.js",
   // static files are served without running the Worker; only these paths go through it
-  "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": ["/photos/*"] },
+  "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": ["/photos/*", "/geo"] },
   "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "toronto-through-time-photos" }],
   // the main address; its www form and toronto.duess.com, the first address, are sent on by ../redirect
   "routes": [{ "pattern": "torontothroughtime.com", "custom_domain": true }]
