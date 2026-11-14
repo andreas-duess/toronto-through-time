@@ -1414,16 +1414,15 @@ function showBuilding(info) {
   }
   if (info.picked && info.layer?.id === "poppies") {
     return showInfo(info.object[2], [["", "Someone from this home died in the Second World War."],
-      ["How we know", `From a published map of Toronto's war dead, which lists home addresses.${info.object[3] ? " This house number is not there today, so the poppy is at the nearest one." : ""}`]]);
+      ...(info.object[3] ? [["", "This house number is not there today, so the poppy is at the nearest one."]] : [])]);
   }
   if (info.picked && info.layer?.id === "bikes") {
     const s = info.object;
-    return showInfo(s.name, [["Bikes", s.ebikes ? `${s.bikes}, of them ${s.ebikes} electric` : s.bikes], ["Free docks", s.docks],
-      ["From", "Bike Share Toronto, counted right now"]]);
+    return showInfo(s.name, [["Bikes", s.ebikes ? `${s.bikes}, of them ${s.ebikes} electric` : s.bikes], ["Free docks", s.docks]]);
   }
   if (info.picked && info.layer?.id === "planes") {
     const p = info.object;
-    const rows = (route) => [...(route ? [["Airline", route.airline], ["Route", route.text]] : []), ...(p.type ? [["Type", p.type]] : []),
+    const rows = (route) => [...(route ? [["Airline", route.airline], ["Usual route", route.text]] : []), ...(p.type ? [["Type", p.type]] : []),
       ["Height", p.up ? `${p.up.toLocaleString("en-CA")} m` : "on the ground"], ["Speed", `${Math.round(p.speed * 3.6)} km/h`]];
     showInfo(p.flight || "Aircraft", rows(null));
     // Where the flight usually goes, looked up by its flight number. Private aircraft have none.
@@ -1437,8 +1436,7 @@ function showBuilding(info) {
     return;
   }
   if (info.picked && info.layer?.id === "transit") {
-    return showInfo(transitName(info.object), [["Route", info.object.route], ["Vehicle", info.object.id],
-      ["From", "TTC live data. It can be up to 30 seconds old."]]);
+    return showInfo(transitName(info.object), [["Route", info.object.route], ["Vehicle", info.object.id]]);
   }
   if (info.picked && info.layer?.id.startsWith("landmark-")) {
     const fact = FACTS[info.object.key];
