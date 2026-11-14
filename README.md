@@ -107,6 +107,30 @@ georeferenced maps of 1834 and 1842), `rail_years.csv` (opening year of each rai
 `lost_zones.csv` (places where written sources date the lost buildings: parts of the Island, the
 old Trinity College), `island.csv` (the research behind the Island rows). `places_README.md` lists what is estimated or unsourced.
 
+## The rest of the city, and keeping it current
+
+Etobicoke, York, North York, East York and Scarborough are drawn as they stand today
+(`web/public/data/d/<district>/`): streets and parks from 1998, buildings at the last year. They
+have no history. To bring them up to date, about twice a year:
+
+```sh
+# 1. the City's newest 3D massing (outline and multipatch editions) into data/raw: add the new
+#    edition's resource ids to pipeline/download.py and point build.py and shapes.py at it
+uv run pipeline/download.py
+# 2. each district: its shapes, then its cells, streets and parks
+for d in ETOBICOKE YORK "NORTH YORK" "EAST YORK" SCARBOROUGH; do
+  uv run --no-project --python 3.12 --with fiona --with geopandas --with pyproj pipeline/shapes.py --area "$d"
+  uv run pipeline/district.py "$d"
+done
+# 3. live data that is a snapshot
+uv run pipeline/chargers.py
+# 4. publish
+cd web && npm run deploy
+```
+
+`LAST_YEAR` in `pipeline/build.py` is the year "today" stands for; it moves with the calendar.
+The old city's own refresh is the full run above.
+
 ## Online
 
 Live at https://torontothroughtime.com (https://toronto.duess.com, the first address, and the www form redirect there:
