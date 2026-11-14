@@ -1410,8 +1410,7 @@ function showBuilding(info) {
     const [, , name, network, address, slow, fast, plugs, year] = info.object;
     const count = [slow ? `${slow} regular (Level 2)` : "", fast ? `${fast} fast` : ""].filter(Boolean).join(", ");
     return showInfo(name || "Charging station", [["Network", network === "Tesla" ? "Tesla Supercharger" : network], ["Address", address],
-      ...(count ? [["Chargers", count]] : []), ...(plugs ? [["Plugs", plugs]] : []), ["Opened", year],
-      ["From", "Alternative Fuels Station Locator (Natural Resources Canada and the US Department of Energy)"]]);
+      ...(count ? [["Chargers", count]] : []), ...(plugs ? [["Plugs", plugs]] : []), ["Opened", year]]);
   }
   if (info.picked && info.layer?.id === "poppies") {
     return showInfo(info.object[2], [["", "Someone from this home died in the Second World War."],
