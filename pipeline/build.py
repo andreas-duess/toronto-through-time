@@ -769,7 +769,7 @@ def write_buildings(b):
 
 
 def write_tables():
-    for name in ["population", "story"]:
+    for name in ["population", "population_city", "story"]:
         with open(MANUAL / f"{name}.csv") as f:
             rows = list(csv.DictReader(f))
         (OUT / f"{name}.json").write_text(json.dumps(rows))

@@ -14,8 +14,14 @@ of CELL_M metres, one file each (cell.<n>.bin, gzip), and an index:
     the roofs' middles packed the same way, and their five uint16 each as build.write_roofs has them
   streets.json: lines with kind (as streets.json has it) and name
   parks.json: polygons
+  cell.<n>.json: {"a": [street address of each building, "" if none], "n": {building: name}}, fetched
+    when a building of the cell is clicked. Addresses are the City's address points; names are
+    OpenStreetMap's named buildings (data/raw/osm/named_city.json).
+  trees.<n>.bin (gzip): today's trees of a cell, placed as pipeline/trees.py places the old city's:
+    a uint32 count, the positions packed as above, a uint8 crown radius (dm) each
 
-Run: uv run pipeline/district.py ETOBICOKE      (with --ground: its streets and parks only, from 1998)
+Run: uv run --with rasterio --with pyogrio --with scipy pipeline/district.py ETOBICOKE
+(with --ground: its streets and parks only, from 1998; with --no-trees: without the trees)
 """
 import gzip
 import json
@@ -28,6 +34,7 @@ import shapely
 
 import build
 import pack
+import pandas as pd
 import streets as streets_
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -55,14 +62,58 @@ def cell_file(b, roof_of, middle, info):
 JOINED = 1998     # the year the six municipalities became one city
 
 
+def names_and_addresses(b):
+    """For each building its street address ("" if none) and its name (None if none)."""
+    ap = build.load_address_points()
+    pts = gpd.GeoDataFrame(ap[["address"]], geometry=gpd.points_from_xy(ap.lon, ap.lat), crs=4326).to_crs(build.UTM)
+    address = gpd.sjoin(pts, b[["geometry"]], predicate="within").groupby("index_right").address.first().reindex(b.index).fillna("")
+    named = [e for e in json.loads((RAW / "osm" / "named_city.json").read_text())["elements"] if "bounds" in e]
+    centre = gpd.GeoDataFrame({"name": [e["tags"]["name"] for e in named]}, crs=4326, geometry=gpd.points_from_xy(
+        [(e["bounds"]["minlon"] + e["bounds"]["maxlon"]) / 2 for e in named], [(e["bounds"]["minlat"] + e["bounds"]["maxlat"]) / 2 for e in named])).to_crs(build.UTM)
+    name = gpd.sjoin(centre, b[["geometry"]], predicate="within").groupby("index_right").name.first().reindex(b.index)
+    # the other outlines of the same building: inside the named one's box (not boxes over 1.5 ha), or at its address
+    boxes = gpd.GeoDataFrame({"name": [e["tags"]["name"] for e in named]}, crs=4326, geometry=[
+        shapely.box(e["bounds"]["minlon"], e["bounds"]["minlat"], e["bounds"]["maxlon"], e["bounds"]["maxlat"]) for e in named]).to_crs(build.UTM)
+    boxes = boxes[boxes.area <= 15000]
+    cen = gpd.GeoDataFrame(geometry=b.geometry.centroid, crs=build.UTM)
+    name = name.fillna(gpd.sjoin(cen, boxes, predicate="within").groupby(level=0).name.first().reindex(b.index))
+    at = pd.DataFrame({"address": address, "name": name})
+    same = at[(at.address != "") & at.name.notna()].groupby("address").name.first()
+    return address, name.fillna(address.map(same))
+
+
+def tree_files(area, b, out):
+    """Today's trees, cell by cell. Returns the index entries."""
+    import trees
+    rng = np.random.default_rng(1)
+    grid, transform = trees.canopy(area, b.geometry)
+    at, radius = trees.place(grid, rng)
+    x, y = transform * (at[:, 1] + 0.5, at[:, 0] + 0.5)
+    pts = gpd.GeoSeries(gpd.points_from_xy(x, y), crs=trees.MTM)
+    utm = shapely.get_coordinates(pts.to_crs(build.UTM).values)
+    lonlat = shapely.get_coordinates(pts.to_crs(4326).values)
+    cx, cy = np.floor(utm[:, 0] / CELL_M).astype(int), np.floor(utm[:, 1] / CELL_M).astype(int)
+    entries = []
+    for n, (cxx, cyy) in enumerate(sorted(set(zip(cx, cy)))):
+        rows = np.flatnonzero((cx == cxx) & (cy == cyy))
+        rows = rows[np.lexsort([lonlat[rows, 0], np.round(lonlat[rows, 1], 3)])]      # in rows from west to east, so that the file packs small
+        data = gzip.compress(np.array([len(rows)], "<u4").tobytes() + np.ascontiguousarray(pack.deltas(lonlat[rows] - build.ORIGIN)).tobytes()
+                             + np.round(radius[rows] * 10).astype("u1").tobytes(), 9, mtime=0)
+        (out / f"trees.{n}.bin").write_bytes(data)
+        w, s, e, nn = lonlat[rows, 0].min(), lonlat[rows, 1].min(), lonlat[rows, 0].max(), lonlat[rows, 1].max()
+        entries.append({"file": f"trees.{n}.bin", "box": [round(w, 5), round(s, 5), round(e, 5), round(nn, 5)], "trees": len(rows)})
+    return entries, len(at)
+
+
 if __name__ == "__main__":
     area = sys.argv[1].upper()
     ground_only = "--ground" in sys.argv        # streets and parks only; the buildings come later
     slug = area.lower().replace(" ", "_")
     out = ROOT / "web" / "public" / "data" / "d" / slug
     out.mkdir(parents=True, exist_ok=True)
-    for old in out.glob("cell.*.bin"):
+    for old in [*out.glob("cell.*.bin"), *out.glob("cell.*.json"), *out.glob("trees.*.bin")]:
         old.unlink()
+    tree_cells, n_trees = [], 0
 
     cells, size, n_buildings, n_roofs = [], 0, 0, 0
     if ground_only:
@@ -82,6 +133,9 @@ if __name__ == "__main__":
         roof_at = np.full(len(b), -1)
         roof_at[roof_of] = np.arange(len(roof_of))
         n_buildings, n_roofs = len(b), len(roof_of)
+        address, name = names_and_addresses(b)
+        if "--no-trees" not in sys.argv:
+            tree_cells, n_trees = tree_files(area, b, out)
 
         cen = b.geometry.centroid
         cx, cy = np.floor(cen.x / CELL_M).astype(int), np.floor(cen.y / CELL_M).astype(int)
@@ -91,6 +145,8 @@ if __name__ == "__main__":
             has = roof_at[rows] >= 0
             data = cell_file(mine, np.flatnonzero(has), middle[roof_at[rows][has]], info[roof_at[rows][has]])
             (out / f"cell.{n}.bin").write_bytes(data)
+            named = {int(i): v for i, v in enumerate(name.values[rows]) if isinstance(v, str)}
+            (out / f"cell.{n}.json").write_text(json.dumps({"a": [a.title() for a in address.values[rows]], "n": named}, separators=(",", ":"), ensure_ascii=False))
             size += len(data)
             w, s_, e, nn = mine.to_crs(4326).total_bounds
             cells.append({"file": f"cell.{n}.bin", "box": [round(w, 5), round(s_, 5), round(e, 5), round(nn, 5)], "buildings": len(mine)})
@@ -117,6 +173,9 @@ if __name__ == "__main__":
 
     w, s_, e, nn = gpd.GeoSeries([limits], crs=build.UTM).to_crs(4326).total_bounds
     (out / "index.json").write_text(json.dumps({"name": area.title(), "ground": JOINED, "from": TODAY, "origin": build.ORIGIN,
-                                                "box": [round(w, 4), round(s_, 4), round(e, 4), round(nn, 4)], "cells": cells}))
+                                                "box": [round(w, 4), round(s_, 4), round(e, 4), round(nn, 4)], "cells": cells, "trees": tree_cells}))
+    if not ground_only:
+        print(f"  with a name: {int(name.notna().sum()):,}; with an address: {int((address != '').sum()):,}; trees: {n_trees:,} in {len(tree_cells)} files,",
+              f"{sum((out / t['file']).stat().st_size for t in tree_cells) / 1e6:.1f} MB")
     print(f"{area.title()}: {n_buildings:,} buildings, {n_roofs:,} sloped roofs, {len(cells)} cells, {size / 1e6:.1f} MB;",
           f"streets {(out / 'streets.json').stat().st_size / 1e6:.1f} MB, parks {(out / 'parks.json').stat().st_size / 1e6:.1f} MB")

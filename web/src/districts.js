@@ -46,6 +46,11 @@ function readCell(buffer) {
   return cell;
 }
 
+function readTrees(buffer) {
+  const n = new Uint32Array(buffer, 0, 1)[0];
+  return { length: n, positions: unpackPoints(new Uint8Array(buffer, 4, n * 8), n, 2), sizes: new Uint8Array(buffer, 4 + n * 8, n) };
+}
+
 const districts = [];     // { dir, name, from, cells: [{ file, box, state: undefined | "loading" | cell }] }
 
 export async function loadDistricts(dir, names) {
@@ -58,19 +63,31 @@ export async function loadDistricts(dir, names) {
 
 // The cells of the districts shown in `year` that lie in the view box [w, s, e, n]; those not yet
 // loaded are fetched, and `onLoad` is called as each arrives.
-export function districtCells(year, box, onLoad) {
+export const districtCells = (year, box, onLoad) => inView("cells", readCell, year, box, onLoad);
+// the same for the cells of trees
+export const districtTrees = (year, box, onLoad) => inView("trees", readTrees, year, box, onLoad);
+
+function inView(kind, read, year, box, onLoad) {
   const out = [];
   for (const d of districts) {
     if (year < d.from) continue;
-    for (const c of d.cells) {
+    for (const c of d[kind] ?? []) {
       if (c.box[0] > box[2] || c.box[2] < box[0] || c.box[1] > box[3] || c.box[3] < box[1]) continue;
       if (!c.state) {
         c.state = "loading";
-        gunzip(d.dir + c.file).then((buffer) => { c.state = readCell(buffer); onLoad(); }).catch(() => { c.state = undefined; });
+        gunzip(d.dir + c.file).then((buffer) => { c.state = read(buffer); onLoad(); }).catch(() => { c.state = undefined; });
       } else if (c.state !== "loading") {
-        out.push({ id: `${d.slug}-${c.file}`, ...c.state });
+        out.push({ id: `${d.slug}-${c.file}`, url: d.dir + c.file, ...c.state });
       }
     }
   }
   return out;
+}
+
+// The address and name of building `index` of a cell (its file's address), fetched when asked for.
+const infos = new Map();
+export function buildingInfo(url, index) {
+  const file = url.replace(/\.bin$/, ".json");
+  if (!infos.has(file)) infos.set(file, fetch(file).then((r) => r.json()).catch(() => ({ a: [], n: {} })));
+  return infos.get(file).then((d) => ({ address: d.a[index] || "", name: d.n[index] || "" }));
 }

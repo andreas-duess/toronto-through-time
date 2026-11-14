@@ -34,10 +34,11 @@ APART = 7.5       # metres between the middles of two crowns, at least
 GRID = 8.0        # spacing of the trees that fill wide canopy
 
 
-def canopy():
-    """The tree canopy of the old city as a grid, without what lies over a building."""
+def canopy(area="TORONTO", roofs=None):
+    """The tree canopy of a former municipality as a grid, without what lies over a building
+    (roofs: the buildings' outlines; for the old city they are read from the page's files)."""
     old = gpd.read_file(RAW / "former_municipalities.geojson")
-    old = old[old.AREA_NAME == "TORONTO"].to_crs(MTM).geometry.iloc[0]
+    old = old[old.AREA_NAME == area].to_crs(MTM).geometry.iloc[0]
     x0, y0, x1, y1 = old.bounds
     shape = (int((y1 - y0) / CELL) + 1, int((x1 - x0) / CELL) + 1)
     transform = Affine(CELL, 0, x0, 0, -CELL, y0 + shape[0] * CELL)
@@ -45,10 +46,12 @@ def canopy():
                           where="gridcode = 1", columns=["gridcode"])
     grid = rasterio.features.rasterize(shapely.make_valid(cover.geometry.values), shape, transform=transform, dtype="uint8")
     grid &= rasterio.features.rasterize([old], shape, transform=transform, dtype="uint8")
-    origin = json.loads((OUT / "meta.json").read_text())["origin"]
-    pos = np.fromfile(OUT / "positions.bin", "<f4").reshape(-1, 3)[:, :2].astype(float) + origin
-    starts = np.fromfile(OUT / "starts.bin", "<u4")
-    roofs = gpd.GeoSeries([shapely.Polygon(pos[a:b]) for a, b in zip(starts[:-1], starts[1:]) if b - a >= 3], crs=4326).to_crs(MTM)
+    if roofs is None:
+        origin = json.loads((OUT / "meta.json").read_text())["origin"]
+        pos = np.fromfile(OUT / "positions.bin", "<f4").reshape(-1, 3)[:, :2].astype(float) + origin
+        starts = np.fromfile(OUT / "starts.bin", "<u4")
+        roofs = gpd.GeoSeries([shapely.Polygon(pos[a:b]) for a, b in zip(starts[:-1], starts[1:]) if b - a >= 3], crs=4326)
+    roofs = roofs.to_crs(MTM)
     grid[rasterio.features.rasterize(roofs.values, shape, transform=transform, dtype="uint8") == 1] = 0
     return grid, transform
 

@@ -14,7 +14,7 @@ import { watchBikes, bikeStations } from "./bikes.js";
 import { watchPlanes, planesNow, planeMesh } from "./planes.js";
 import { weather, watchWeather, fall } from "./weather.js";
 import { loadPhotos, photoPins, photo, cameraIcon } from "./photos.js";
-import { loadDistricts, districtCells } from "./districts.js";
+import { loadDistricts, districtCells, districtTrees, buildingInfo } from "./districts.js";
 
 const $ = (id) => document.getElementById(id);
 const DATA = "./data/";
@@ -201,7 +201,7 @@ map.on("moveend", () => { if (meta && districts.some((d) => state.year >= d.grou
 // the trees come and go with the zoom
 let treesOn = 0;
 let bikesShown = false;
-map.on("zoom", () => { if (meta && (treeSets() !== treesOn || transitOn() || planesOn() || bikesOn() || bikesShown || photosShow.on || poppiesOn() || live.chargers)) render(); });
+map.on("zoom", () => { if (meta && (districts.length || treeSets() !== treesOn || transitOn() || planesOn() || bikesOn() || bikesShown || photosShow.on || poppiesOn() || live.chargers)) render(); });
 // and so do the batches of buildings, with the view
 let drawn = "";
 map.on("move", () => { if (buildings && drawnKey() !== drawn) render(); });
@@ -288,13 +288,33 @@ function pearsonLayer() {
 // The districts outside the old city (districts.js): their buildings and roofs cell by cell, for
 // the part of the map in view, from DISTRICT_ZOOM in; their streets and parks as map layers.
 const DISTRICT_ZOOM = 11.5;
+const DISTRICT_TREE_ZOOM = 14.5;
 let districts = [];
+// the cells drawn, by layer name, for the card of a building that is clicked
+const districtShown = new Map();
 function districtLayers() {
   if (map.getZoom() < DISTRICT_ZOOM) return [];
   const b = map.getBounds();
-  const cells = districtCells(state.year, [b.getWest() - 0.01, b.getSouth() - 0.01, b.getEast() + 0.01, b.getNorth() + 0.01], render);
+  const view = [b.getWest() - 0.01, b.getSouth() - 0.01, b.getEast() + 0.01, b.getNorth() + 0.01];
+  const cells = districtCells(state.year, view, render);
   const before = map.getLayer("places-city") ? "places-city" : undefined;
-  return cells.flatMap((c) => [
+  districtShown.clear();
+  for (const c of cells) districtShown.set(`district-${c.id}`, c);
+  const grown = Math.min(1, (state.year - (meta.lastYear - TREE_YEARS)) / TREE_YEARS);
+  const woods = map.getZoom() >= DISTRICT_TREE_ZOOM && grown > 0 ? districtTrees(state.year, view, render) : [];
+  return [...woods.map((t) => new SimpleMeshLayer({
+    id: `district-trees-${t.id}`,
+    beforeId: before,
+    data: t,
+    mesh: TREE_MESH,
+    coordinateSystem: COORDINATE_SYSTEM.LNGLAT_OFFSETS,
+    coordinateOrigin: meta.origin,
+    getPosition: (_, { index, target }) => { target[0] = t.positions[index * 2]; target[1] = t.positions[index * 2 + 1]; target[2] = 0; return target; },
+    getScale: (_, { index }) => { const r = t.sizes[index] / 10; return [r, r, r]; },
+    getColor: (_, { index }) => TREE_COLORS[(index * 7919) % TREE_COLORS.length],
+    sizeScale: grown,
+    material: MATERIAL,
+  })), ...cells.flatMap((c) => [
     new SolidPolygonLayer({
       id: `district-${c.id}`,
       beforeId: before,
@@ -307,6 +327,9 @@ function districtLayers() {
       getElevation: (_, { index }) => c.heights[index],
       getFillColor: OLD_COLOR,
       material: MATERIAL,
+      pickable: true,
+      autoHighlight: true,
+      highlightColor: [255, 255, 255, 90],
       getYears: (_, { index, target }) => { target[0] = c.years[index]; target[1] = 9999; target[2] = 1; target[3] = 0; return target; },
       currentYear: state.year,
       growYears: RISE_YEARS,
@@ -329,7 +352,7 @@ function districtLayers() {
       updateTriggers: { getColor: weatherShown },
       material: MATERIAL,
     })] : []),
-  ]);
+  ])];
 }
 // A district's streets and parks, from the year it joined the city (d.ground): added to the map the
 // first time its years come up with the district in view.
@@ -361,7 +384,7 @@ function districtGround(year) {
 // Aircraft, from zoom PLANE_ZOOM in: at their real height, and drawn much larger than they are so
 // that they can be seen (about 34 pixels long).
 const PLANE_MESH = planeMesh();
-const PLANE_ZOOM = 9.5;
+const PLANE_ZOOM = 10.5;
 const planesOn = () => live.planes && Boolean(meta) && state.year >= meta.lastYear - 0.05 && map.getZoom() >= PLANE_ZOOM && !document.hidden;
 function planeLayer() {
   const metres = Math.max(40, (34 * 56600) / 2 ** map.getZoom());
@@ -723,6 +746,7 @@ async function load() {
     s.yearEnd = Number(s.year_end) > s.year ? Number(s.year_end) : s.year;
   }
   population = population.map((p) => [Number(p.year), Number(p.population)]);
+  cityPopulation = (await fetchJson("population_city.json").catch(() => [])).map((p) => [Number(p.year), Number(p.population)]);
   story.files = await fetchJson("narration.json").catch(() => []);
   events = await fetchJson("events.json").catch(() => null);
   fetchJson("poppies.json").then((p) => { poppies = p; render(); }).catch(() => {});
@@ -1192,11 +1216,16 @@ function render() {
   $("panel").classList.toggle("past", !today_());
   $("year-label").textContent = String(y);
   $("population-value").textContent = populationAt(state.year);
+  $("population-of").textContent = state.year >= CITY_YEAR && cityPopulation.length ? "City of Toronto" : "old City of Toronto";
   $("standing").textContent = `${countStanding(y).toLocaleString("en-CA")} of today's buildings are built`;
   if (document.activeElement !== $("slider") || state.playing) $("slider").value = String(state.year);
 }
 
-function populationAt(year) {
+// From CITY_YEAR the count is of the whole city, which the old city joined that year.
+const CITY_YEAR = 1998;
+let cityPopulation = [];
+function populationAt(year, series = year >= CITY_YEAR && cityPopulation.length ? cityPopulation : population) {
+  const population = series;
   if (year < population[0][0]) return "—";
   for (let i = 1; i < population.length; i++) {
     const [y0, p0] = population[i - 1];
@@ -1484,6 +1513,17 @@ function closeStory() {
 
 function showBuilding(info) {
   if (info.picked && info.layer?.id === "photos") return showPhotos(info.object.ids, 0);
+  // a building outside the old city: its name and address are fetched when it is clicked
+  const cell = info.picked ? districtShown.get(info.layer?.id) : null;
+  if (cell && info.index >= 0) {
+    const i = info.index, height = `${Math.round(cell.heights[i])} m`;
+    showInfo("Building", [["Height", height]]);
+    buildingInfo(cell.url, i).then((d) => {
+      if ($("info").hidden || $("info").querySelector("h3")?.textContent !== "Building") return;
+      showInfo(d.name || d.address || "Building", [...(d.name && d.address ? [["Address", d.address]] : []), ["Height", height]]);
+    });
+    return;
+  }
   if (info.picked && info.layer?.id === "chargers") {
     const [, , name, network, address, slow, fast, plugs, year] = info.object;
     const count = [slow ? `${slow} regular (Level 2)` : "", fast ? `${fast} fast` : ""].filter(Boolean).join(", ");

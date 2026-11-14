@@ -120,7 +120,7 @@ uv run pipeline/download.py
 # 2. each district: its shapes, then its cells, streets and parks
 for d in ETOBICOKE YORK "NORTH YORK" "EAST YORK" SCARBOROUGH; do
   uv run --no-project --python 3.12 --with fiona --with geopandas --with pyproj pipeline/shapes.py --area "$d"
-  uv run pipeline/district.py "$d"
+  uv run --with rasterio --with pyogrio --with scipy pipeline/district.py "$d"      # buildings, roofs, trees, addresses, names, streets, parks
 done
 # 3. live data that is a snapshot
 uv run pipeline/chargers.py
