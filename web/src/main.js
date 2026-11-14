@@ -244,7 +244,7 @@ const TRUE_SIZE_ZOOM = 16;
 const STREETCAR = { size: [30, 2.5, 3.4], color: [200, 32, 38] };
 const BUS = { size: [12, 2.5, 3], color: [58, 74, 96] };
 // the switches of the two live layers in the panel
-const live = { transit: true, bikes: true, planes: true, weather: true, chargers: true };
+const live = { transit: true, bikes: true, planes: true, weather: true, chargers: true, solid: true };
 const transitOn = () => live.transit && Boolean(meta) && state.year >= meta.lastYear - 0.05 && map.getZoom() >= TRANSIT_ZOOM && !document.hidden;
 function transitLayer() {
   const larger = Math.max(1, 2 ** (TRUE_SIZE_ZOOM - map.getZoom()) * 0.75);
@@ -292,7 +292,7 @@ const DISTRICT_TREE_ZOOM = 14.5;
 let districts = [];
 // the cells drawn, by layer name, for the card of a building that is clicked
 const districtShown = new Map();
-function districtLayers() {
+function districtLayers(withTrees) {
   if (map.getZoom() < DISTRICT_ZOOM) return [];
   const b = map.getBounds();
   const view = [b.getWest() - 0.01, b.getSouth() - 0.01, b.getEast() + 0.01, b.getNorth() + 0.01];
@@ -301,7 +301,7 @@ function districtLayers() {
   districtShown.clear();
   for (const c of cells) districtShown.set(`district-${c.id}`, c);
   const grown = Math.min(1, (state.year - (meta.lastYear - TREE_YEARS)) / TREE_YEARS);
-  const woods = map.getZoom() >= DISTRICT_TREE_ZOOM && grown > 0 ? districtTrees(state.year, view, render) : [];
+  const woods = withTrees && map.getZoom() >= DISTRICT_TREE_ZOOM && grown > 0 ? districtTrees(state.year, view, render) : [];
   return [...woods.map((t) => new SimpleMeshLayer({
     id: `district-trees-${t.id}`,
     beforeId: before,
@@ -1204,8 +1204,11 @@ function render() {
   fadeEvents(state.year);
   districtGround(state.year);
   updateAerial();
+  // On an aerial photograph the buildings stay, unless switched off; the trees go: the photograph has its own.
   const model = aerial.shown === null;
-  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(model && lost ? lostLayers() : []), ...(model ? buildingLayers() : []), ...(model && roofs ? roofLayers() : []), ...(model ? landmarkLayers() : []), ...(model && trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(chargersOn() ? [chargerLayer()] : []), ...(poppiesOn() ? [poppyLayer()] : []), ...(photosOn() ? [photoLayer()] : []), ...districtLayers(), ...(pearson && state.year >= meta.lastYear ? [pearsonLayer()] : []), ...(transitOn() ? [transitLayer()] : []), ...(planesOn() ? [planeLayer()] : [])] });
+  const solid = model || live.solid;
+  $("solid").disabled = model;
+  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(solid && lost ? lostLayers() : []), ...(solid ? buildingLayers() : []), ...(solid && roofs ? roofLayers() : []), ...(solid ? landmarkLayers() : []), ...(model && trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(chargersOn() ? [chargerLayer()] : []), ...(poppiesOn() ? [poppyLayer()] : []), ...(photosOn() ? [photoLayer()] : []), ...(solid ? districtLayers(model) : []), ...(solid && pearson && state.year >= meta.lastYear ? [pearsonLayer()] : []), ...(transitOn() ? [transitLayer()] : []), ...(planesOn() ? [planeLayer()] : [])] });
   runTransit();
   watchBikes(bikesOn(), render);
   treesOn = treeSets();
@@ -1305,7 +1308,7 @@ function setupPanel() {
       about.setAttribute("aria-expanded", String(!more.hidden));
     });
   }
-  for (const key of ["transit", "bikes", "planes", "weather", "chargers"]) {
+  for (const key of ["transit", "bikes", "planes", "weather", "chargers", "solid"]) {
     $(key).addEventListener("click", () => {
       live[key] = !live[key];
       $(key).setAttribute("aria-pressed", String(live[key]));
