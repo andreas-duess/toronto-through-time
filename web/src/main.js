@@ -288,7 +288,6 @@ function pearsonLayer() {
 // The districts outside the old city (districts.js): their buildings and roofs cell by cell, for
 // the part of the map in view, from DISTRICT_ZOOM in; their streets and parks as map layers.
 const DISTRICT_ZOOM = 11.5;
-const DISTRICT_TREE_ZOOM = 14.5;
 let districts = [];
 // the cells drawn, by layer name, for the card of a building that is clicked
 const districtShown = new Map();
@@ -301,7 +300,9 @@ function districtLayers(withTrees) {
   districtShown.clear();
   for (const c of cells) districtShown.set(`district-${c.id}`, c);
   const grown = Math.min(1, (state.year - (meta.lastYear - TREE_YEARS)) / TREE_YEARS);
-  const woods = withTrees && map.getZoom() >= DISTRICT_TREE_ZOOM && grown > 0 ? districtTrees(state.year, view, render) : [];
+  // the trees come in at the same zooms, and as thinly, as the old city's (treeSets)
+  const sets = withTrees ? treeSets() : 0;
+  const woods = sets ? districtTrees(state.year, view, render).flatMap((cell) => cell.sets.slice(0, sets).map((t, k) => ({ ...t, id: `${cell.id}-${k}` }))) : [];
   return [...woods.map((t) => new SimpleMeshLayer({
     id: `district-trees-${t.id}`,
     beforeId: before,
@@ -312,7 +313,7 @@ function districtLayers(withTrees) {
     getPosition: (_, { index, target }) => { target[0] = t.positions[index * 2]; target[1] = t.positions[index * 2 + 1]; target[2] = 0; return target; },
     getScale: (_, { index }) => { const r = t.sizes[index] / 10; return [r, r, r]; },
     getColor: (_, { index }) => TREE_COLORS[(index * 7919) % TREE_COLORS.length],
-    sizeScale: grown,
+    sizeScale: grown * TREE_LARGER[sets - 1],
     material: MATERIAL,
   })), ...cells.flatMap((c) => [
     new SolidPolygonLayer({

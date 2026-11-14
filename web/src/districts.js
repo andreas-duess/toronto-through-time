@@ -46,9 +46,18 @@ function readCell(buffer) {
   return cell;
 }
 
+// A cell's trees in three sets, a quarter, a quarter and a half of them, as the old city's are
+// (trees.js): from far away only the first set is drawn.
 function readTrees(buffer) {
   const n = new Uint32Array(buffer, 0, 1)[0];
-  return { length: n, positions: unpackPoints(new Uint8Array(buffer, 4, n * 8), n, 2), sizes: new Uint8Array(buffer, 4 + n * 8, n) };
+  const positions = unpackPoints(new Uint8Array(buffer, 4, n * 8), n, 2), sizes = new Uint8Array(buffer, 4 + n * 8, n);
+  const ids = [[], [], []];
+  for (let i = 0; i < n; i++) ids[Math.min(2, (i * 7919) % 4)].push(i);
+  return { sets: ids.map((list) => ({
+    length: list.length,
+    positions: Float32Array.from({ length: list.length * 2 }, (_, k) => positions[list[k >> 1] * 2 + (k & 1)]),
+    sizes: Uint8Array.from(list, (i) => sizes[i]),
+  })) };
 }
 
 const districts = [];     // { dir, name, from, cells: [{ file, box, state: undefined | "loading" | cell }] }
