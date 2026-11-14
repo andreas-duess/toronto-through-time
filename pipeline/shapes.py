@@ -15,7 +15,7 @@ outline edition for them.
 
 Writes blocks (UTM): feature (tile and number), height (m above the ground), geometry.
 
-Run: uv run --no-project --python 3.12 --with fiona --with geopandas --with pyproj pipeline/shapes.py [tile ...]
+Run: uv run --no-project --python 3.12 --with fiona --with geopandas --with pyproj pipeline/shapes.py [tile ...] [--area ETOBICOKE]
 (Python 3.12 because fiona, which can read this file, has no build for newer ones.)
 """
 import multiprocessing
@@ -115,10 +115,14 @@ def tile(name):
 
 if __name__ == "__main__":
     import shapely.affinity  # noqa: F401
-    names = sys.argv[1:]
+    # --area ETOBICOKE: the tiles over that former municipality, written to shapes_etobicoke.gpkg
+    area = sys.argv[sys.argv.index("--area") + 1].upper() if "--area" in sys.argv else "TORONTO"
+    if area != "TORONTO":
+        OUT = OUT.with_name(f"shapes_{area.lower().replace(' ', '_')}.gpkg")
+    names = [a for a in sys.argv[1:] if a.startswith("Multipatch")]
     if not names:
         old = gpd.read_file(ROOT / "data" / "raw" / "former_municipalities.geojson")
-        old = old[old.AREA_NAME == "TORONTO"].to_crs(3857).geometry.iloc[0]
+        old = old[old.AREA_NAME == area].to_crs(3857).geometry.iloc[0]
         for name in fiona.listlayers(MODEL):
             if name.startswith("Multipatch"):
                 with fiona.open(MODEL, layer=name) as src:

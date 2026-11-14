@@ -14,6 +14,7 @@ import { watchBikes, bikeStations } from "./bikes.js";
 import { watchPlanes, planesNow, planeMesh } from "./planes.js";
 import { weather, watchWeather, fall } from "./weather.js";
 import { loadPhotos, photoPins, photo, cameraIcon } from "./photos.js";
+import { loadDistricts, districtCells } from "./districts.js";
 
 const $ = (id) => document.getElementById(id);
 const DATA = "./data/";
@@ -189,6 +190,8 @@ const map = new maplibregl.Map({
 });
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
 map.on("moveend", writeHash);
+// the districts outside the old city are loaded for wherever the map comes to rest
+map.on("moveend", () => { if (meta && districts.some((d) => state.year >= d.from)) render(); });
 // A tip beside the zoom buttons on how to turn the map. It stays.
 {
   const hint = document.getElementById("rotate-hint");
@@ -280,6 +283,76 @@ function pearsonLayer() {
     sunDirection: sun.direction,
     extensions: [riseExtension],
   });
+}
+
+// The districts outside the old city (districts.js): their buildings and roofs cell by cell, for
+// the part of the map in view, from DISTRICT_ZOOM in; their streets and parks as map layers.
+const DISTRICT_ZOOM = 11.5;
+let districts = [];
+function districtLayers() {
+  if (map.getZoom() < DISTRICT_ZOOM) return [];
+  const b = map.getBounds();
+  const cells = districtCells(state.year, [b.getWest() - 0.01, b.getSouth() - 0.01, b.getEast() + 0.01, b.getNorth() + 0.01], render);
+  const before = map.getLayer("places-city") ? "places-city" : undefined;
+  return cells.flatMap((c) => [
+    new SolidPolygonLayer({
+      id: `district-${c.id}`,
+      beforeId: before,
+      data: c.data,
+      coordinateSystem: COORDINATE_SYSTEM.LNGLAT_OFFSETS,
+      coordinateOrigin: meta.origin,
+      _normalize: false,
+      _windingOrder: "CCW",
+      extruded: true,
+      getElevation: (_, { index }) => c.heights[index],
+      getFillColor: OLD_COLOR,
+      material: MATERIAL,
+      getYears: (_, { index, target }) => { target[0] = c.years[index]; target[1] = 9999; target[2] = 1; target[3] = 0; return target; },
+      currentYear: state.year,
+      growYears: RISE_YEARS,
+      tint: [1, 1, 1],
+      tintYears: NEW_SPAN,
+      sunDirection: sun.direction,
+      extensions: [riseExtension],
+    }),
+    ...(c.roofs ? [new SimpleMeshLayer({
+      id: `district-roofs-${c.id}`,
+      beforeId: before,
+      data: c.roofs,
+      mesh: ROOF_MESH,
+      coordinateSystem: COORDINATE_SYSTEM.LNGLAT_OFFSETS,
+      coordinateOrigin: meta.origin,
+      getPosition: (_, { index, target }) => { target[0] = c.roofs.middles[index * 2]; target[1] = c.roofs.middles[index * 2 + 1]; target[2] = c.roofs.size[index * 5 + 2]; return target; },
+      getScale: (_, { index }) => [c.roofs.size[index * 5], c.roofs.size[index * 5 + 1], c.roofs.size[index * 5 + 3]],
+      getOrientation: (_, { index }) => [0, c.roofs.size[index * 5 + 4], 0],
+      getColor: roofColor(),
+      updateTriggers: { getColor: weatherShown },
+      material: MATERIAL,
+    })] : []),
+  ]);
+}
+// a district's streets and parks, added to the map the first time its years come up
+function districtGround(year) {
+  if (!map.getLayer("streets")) return;
+  for (const d of districts) {
+    const on = year >= d.from;
+    if (on && !map.getSource(`d-${d.slug}-streets`)) {
+      map.addSource(`d-${d.slug}-parks`, { type: "geojson", data: d.dir + "parks.json" });
+      map.addLayer({ id: `d-${d.slug}-parks`, type: "fill", source: `d-${d.slug}-parks`, paint: { "fill-color": PARK_COLOR } }, "water");
+      map.addSource(`d-${d.slug}-streets`, { type: "geojson", data: d.dir + "streets.json" });
+      map.addLayer({ id: `d-${d.slug}-streets-edge`, type: "line", source: `d-${d.slug}-streets`, minzoom: 14,
+        layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#d9d2c0", "line-width": streetWidth(1) } }, "rail");
+      map.addLayer({ id: `d-${d.slug}-streets`, type: "line", source: `d-${d.slug}-streets`,
+        layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": STREET_COLOR, "line-width": streetWidth(0.82) } }, "rail");
+      map.addLayer({ id: `d-${d.slug}-labels`, type: "symbol", source: `d-${d.slug}-streets`, minzoom: 13.5, filter: ["!=", ["get", "name"], ""],
+        layout: { "symbol-placement": "line", "text-field": ["get", "name"], "text-font": ["Noto Sans Regular"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 13.5, 9.5, 17, 12.5], "symbol-spacing": 320, "symbol-sort-key": ["-", 0, ["get", "kind"]] },
+        paint: { "text-color": "#7b7365", "text-halo-color": STREET_COLOR, "text-halo-width": 1.4 } }, "street-labels");
+    }
+    for (const part of ["parks", "streets-edge", "streets", "labels"]) {
+      if (map.getLayer(`d-${d.slug}-${part}`)) map.setLayoutProperty(`d-${d.slug}-${part}`, "visibility", on ? "visible" : "none");
+    }
+  }
 }
 
 // Aircraft, from zoom PLANE_ZOOM in: at their real height, and drawn much larger than they are so
@@ -651,6 +724,7 @@ async function load() {
   events = await fetchJson("events.json").catch(() => null);
   fetchJson("poppies.json").then((p) => { poppies = p; render(); }).catch(() => {});
   fetchJson("pearson.json").then((p) => { pearson = p; render(); }).catch(() => {});
+  loadDistricts(DATA, ["etobicoke"]).then((d) => { districts = d; render(); });
   fetchJson("chargers.json").then((c) => { chargers = c; render(); }).catch(() => {});
   state.year = opened.year >= meta.firstYear && opened.year <= meta.lastYear ? opened.year : meta.firstYear;
   setupControls();
@@ -1101,9 +1175,10 @@ function render() {
   const shore = updateWater(state.year);
   updateMap(state.year);
   fadeEvents(state.year);
+  districtGround(state.year);
   updateAerial();
   const model = aerial.shown === null;
-  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(model && lost ? lostLayers() : []), ...(model ? buildingLayers() : []), ...(model && roofs ? roofLayers() : []), ...(model ? landmarkLayers() : []), ...(model && trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(chargersOn() ? [chargerLayer()] : []), ...(poppiesOn() ? [poppyLayer()] : []), ...(photosOn() ? [photoLayer()] : []), ...(pearson && state.year >= meta.lastYear ? [pearsonLayer()] : []), ...(transitOn() ? [transitLayer()] : []), ...(planesOn() ? [planeLayer()] : [])] });
+  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(model && lost ? lostLayers() : []), ...(model ? buildingLayers() : []), ...(model && roofs ? roofLayers() : []), ...(model ? landmarkLayers() : []), ...(model && trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(chargersOn() ? [chargerLayer()] : []), ...(poppiesOn() ? [poppyLayer()] : []), ...(photosOn() ? [photoLayer()] : []), ...districtLayers(), ...(pearson && state.year >= meta.lastYear ? [pearsonLayer()] : []), ...(transitOn() ? [transitLayer()] : []), ...(planesOn() ? [planeLayer()] : [])] });
   runTransit();
   watchBikes(bikesOn(), render);
   treesOn = treeSets();

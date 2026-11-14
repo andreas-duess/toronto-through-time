@@ -32,6 +32,8 @@ uv run --with pillow --with scipy --with rasterio pipeline/island.py   # Island 
 uv run --with rasterio pipeline/lost.py    # lost buildings; then run build.py, streets.py and this once more
 uv run --with rasterio --with pyogrio --with scipy pipeline/trees.py   # today's trees, from the city's canopy study
 uv run pipeline/tracks.py      # streetcar tracks, for the live streetcars
+uv run --no-project --python 3.12 --with fiona --with geopandas --with pyproj pipeline/shapes.py --area ETOBICOKE   # then:
+uv run pipeline/district.py ETOBICOKE   # a district outside the old city, as it stands today (web/public/data/d/etobicoke/)
 uv run pipeline/chargers.py    # EV charging stations (needs ~/.config/secrets/NLR_API_KEY)
 uv run pipeline/airports.py    # runways and terminals of Pearson and the Island airport, for the live aircraft
 uv run --no-project --python 3.12 --with fiona --with geopandas --with pyproj pipeline/pearson.py   # Pearson's buildings from Mississauga's 3D model

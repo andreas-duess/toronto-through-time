@@ -71,9 +71,12 @@ def log(*a):
 
 # ---------------------------------------------------------------- buildings
 
-def load_buildings():
+def load_buildings(area="TORONTO"):
+    """The buildings of a former municipality. For the old city, churches get their towers; for the
+    others (pipeline/district.py) a lidar outline whose highest point is far above its average
+    is drawn at the average, as a church is."""
     old = gpd.read_file(RAW / "former_municipalities.geojson")
-    old = old[old.AREA_NAME == "TORONTO"].to_crs(UTM).geometry.iloc[0]
+    old = old[old.AREA_NAME == area].to_crs(UTM).geometry.iloc[0]
     b = gpd.read_file(RAW / "massing_2025" / "3DMassingShapefile_2025_WGS84.shp").to_crs(UTM)
     b["geometry"] = shapely.force_2d(b.geometry.values)
     b = b[b.geometry.is_valid & ~b.geometry.is_empty]
@@ -94,14 +97,19 @@ def load_buildings():
     lidar = b.HEIGHT_SRC == "Lidar-Derived"
     b["roof_avg"], b["roof_peak"] = b.AVG_HEIGHT.where(lidar), b.MAX_HEIGHT.where(lidar)
     b = b[b.area >= 8].reset_index(drop=True)
-    b = churches(shapes(b))
-    log(f"buildings in old Toronto: {len(b):,} polygons")
+    if area == "TORONTO":
+        b = churches(shapes(b))
+    else:
+        b = shapes(b, ROOT / "data" / "interim" / f"shapes_{area.lower().replace(' ', '_')}.gpkg")
+        spiky = ~b.shaped.astype(bool) & (b.HEIGHT_SRC == "Lidar-Derived") & (b.MAX_HEIGHT > 15) & (b.MAX_HEIGHT > 2 * b.AVG_HEIGHT.clip(lower=1))
+        b.loc[spiky, "top"] = np.maximum(b.AVG_HEIGHT[spiky], b.base[spiky] + 3)
+    log(f"buildings in {area.title()}: {len(b):,} polygons")
     return b[["base", "top", "area", "newer_source", "church", "part_of", "shaped", "roof_avg", "roof_peak", "geometry"]], old
 
 
 # ---------------------------------------------------------------- shapes
 
-def shapes(b):
+def shapes(b, path=None):
     """Gives the buildings that are more than one block their real shape.
 
     The outline edition of the City's model has one outline per building with one height, so a
@@ -113,7 +121,7 @@ def shapes(b):
     are (churches()).
     """
     b["church"], b["part_of"], b["shaped"] = False, np.nan, False
-    path = ROOT / "data" / "interim" / "shapes.gpkg"
+    path = path or ROOT / "data" / "interim" / "shapes.gpkg"
     if not path.exists():
         return b
     blocks = gpd.read_file(path)
