@@ -84,11 +84,11 @@
         <div class="layer">
           <div class="layer-top">
             <span class="ico" aria-hidden="true">◉</span>
-            <span class="name">Archive photographs</span>
-            <button class="about" aria-label="About archive photographs" aria-expanded="false">i</button>
-            <button id="photos" class="switch" role="switch" aria-pressed="true" aria-label="Archive photographs"></button>
+            <span class="name">Photographs</span>
+            <button class="about" aria-label="About photographs" aria-expanded="false">i</button>
+            <button id="photos" class="switch" role="switch" aria-pressed="true" aria-label="Photographs"></button>
           </div>
-          <p class="more" hidden>Each camera pin is a spot where an old photo was taken, within two years of the year you picked. Click a pin to see the photos. The photos come from the City of Toronto Archives. A pin shows the place named in the photo's title, so it can be a little off.</p>
+          <p class="more" hidden>Each camera pin is a spot where an old photo was taken, within two years of the year you picked. Click a pin to see the photos. The older photos come from the City of Toronto Archives. A pin shows the place named in the photo's title, so it can be a little off. From 1990 on there are also photos from Wikimedia Commons, taken and shared by many different people.</p>
         </div>
         <div class="layer">
           <div class="layer-top">
@@ -168,8 +168,26 @@
       <a id="sources-link" href="./sources.html" target="_blank" rel="noopener">sources</a>
       <a id="privacy-link" href="/privacy" target="_blank" rel="noopener">privacy</a>
       <a id="terms-link" href="/terms" target="_blank" rel="noopener">terms</a>
-      <a id="comments-link" href="https://x.com/AndreasDuess" target="_blank" rel="noopener" title="An early version. Tell Andreas what is wrong or missing.">comments?</a>
+      <a id="comments-link" href="mailto:hi@torontothroughtime.com">Report a bug</a>
     </footer>
+
+    <dialog id="report" aria-labelledby="report-title">
+      <button class="close" type="button" aria-label="Close">✕</button>
+      <h3 id="report-title">Found something?</h3>
+      <form id="report-form">
+        <p>A bug? Something that needs correcting? Or an idea for the map? Tell us here.</p>
+        <label for="report-text">What did you find?</label>
+        <textarea id="report-text" name="text" rows="5" maxlength="4000" required></textarea>
+        <label for="report-email">Your email, if you would like a reply</label>
+        <input id="report-email" name="email" type="email" maxlength="200" autocomplete="email" />
+        <input name="website" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" class="trap" />
+        <p class="small">The year and the place on your map are sent along, so we can find the spot.</p>
+        <button id="report-send" type="submit">Send</button>
+        <p id="report-problem" class="small" hidden>That did not go through. Please email <a href="mailto:hi@torontothroughtime.com">hi@torontothroughtime.com</a> instead.</p>
+      </form>
+      <p id="report-thanks" hidden>Thank you! Your note is on its way.</p>
+      <p class="small about">This map is looked after by one person, as a hobby. It does not claim to be 100% right, so anything you spot that needs a fix is more than welcome.</p>
+    </dialog>
 
     <div id="info" hidden></div>
     <div id="loading">Loading Toronto…</div>

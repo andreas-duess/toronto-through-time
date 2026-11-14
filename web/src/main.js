@@ -560,15 +560,45 @@ function photoLayer() {
 const photosOn = () => photosShow.on && photosShow.loaded && map.getZoom() >= PHOTO_ZOOM;
 
 // The card for a pin: one picture at a time, the nearest in year first.
+// "Report a bug": a small form whose note the Worker emails on (worker.js, /report), with the
+// year and the view so the spot can be found. Without scripts the link is a plain mailto.
+function setupReport() {
+  const box = $("report"), form = $("report-form");
+  $("comments-link").addEventListener("click", (e) => {
+    e.preventDefault();
+    form.hidden = false;
+    $("report-thanks").hidden = $("report-problem").hidden = true;
+    box.showModal();
+  });
+  box.querySelector(".close").addEventListener("click", () => box.close());
+  box.addEventListener("click", (e) => { if (e.target === box) box.close(); });
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const c = map.getCenter(), send = $("report-send");
+    const note = { text: form.text.value, email: form.email.value, website: form.website.value, year: Math.round(state.year),
+      view: `${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}, zoom ${map.getZoom().toFixed(1)}` };
+    send.disabled = true;
+    const ok = await fetch("/report", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(note) }).then((r) => r.ok).catch(() => false);
+    send.disabled = false;
+    $("report-problem").hidden = ok;
+    if (!ok) return;
+    form.reset();
+    form.hidden = true;
+    $("report-thanks").hidden = false;
+  });
+}
+
 function showPhotos(ids, n) {
   const p = photo(ids[n]);
   const box = $("info");
   box.hidden = false;
   box.className = "photo";
   box.innerHTML = `<button class="close" aria-label="Close">✕</button>` +
-    `<a href="${escapeHtml(p.image)}" target="_blank" rel="noopener"><img src="${escapeHtml(p.image)}" alt=""></a>` +
+    `<a href="${escapeHtml(p.page ?? p.image)}" target="_blank" rel="noopener"><img src="${escapeHtml(p.image)}" alt=""></a>` +
     `<p class="caption">${escapeHtml(p.title)}, ${escapeHtml(p.year)}</p>` +
-    `<p class="credit">Photo: City of Toronto Archives, ${escapeHtml(p.citation)}. The pin shows the place named in the photo's title.</p>` +
+    (p.commons
+      ? `<p class="credit">Photo: ${escapeHtml(p.author || "unknown")}, ${escapeHtml(p.licence)}, from <a href="${escapeHtml(p.page)}" target="_blank" rel="noopener">Wikimedia Commons</a>.</p>`
+      : `<p class="credit">Photo: City of Toronto Archives, ${escapeHtml(p.citation)}. The pin shows the place named in the photo's title.</p>`) +
     (ids.length > 1 ? `<div class="turn"><button class="prev" aria-label="Previous">‹</button><span>${n + 1} of ${ids.length} here</span><button class="next" aria-label="Next">›</button></div>` : "");
   box.querySelector(".close").addEventListener("click", () => { box.hidden = true; });
   box.querySelector(".prev")?.addEventListener("click", () => showPhotos(ids, (n + ids.length - 1) % ids.length));
@@ -761,7 +791,8 @@ async function load() {
   $("loading").classList.add("done");
   roofs = await loadRoofs(DATA).catch(() => null);
   if (roofs) for (let i = 0; i < roofs.length; i++) roofRise.set(roofs.ids[i], roofs.size[i * 5 + 3]);
-  loadPhotos(DATA + "photos.json").then(() => { photosShow.loaded = true; render(); }).catch(() => {});
+  setupReport();
+  loadPhotos(DATA + "photos.json", DATA + "photos_commons.json").then(() => { photosShow.loaded = true; render(); }).catch(() => {});
   // the trees come after everything else; the page does not wait for them
   loadTrees(DATA).then((t) => { trees = t; render(); }).catch(() => {});
 }

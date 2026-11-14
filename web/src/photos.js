@@ -1,13 +1,18 @@
-// Archive photographs (pipeline/photos.py): City of Toronto Archives pictures placed on the map by
-// OldTO, in order of year. Shown as pins for the pictures taken within SPAN years of the year on
+// Photographs, in order of year. Two kinds: City of Toronto Archives pictures placed on the map by
+// OldTO (pipeline/photos.py), and from 1990 on photographs from Wikimedia Commons, located and dated
+// by the people who took them (pipeline/commons.py; rows of [lon, lat, year, file, author, licence]). Shown as pins for the pictures taken within SPAN years of the year on
 // the slider; pictures that would sit on top of each other share a pin.
 const SPAN = 2;
 let base = "", photos = null;   // [lon, lat, year, about, file, title, citation]
 
-export async function loadPhotos(url) {
+export async function loadPhotos(url, commonsUrl) {
   const d = await fetch(url).then((r) => r.json());
   base = d.base;
   photos = d.photos;
+  // the Commons photographs come after; the two lists are merged by year
+  fetch(commonsUrl).then((r) => (r.ok ? r.json() : [])).then((more) => {
+    if (more.length) photos = [...photos, ...more.map((m) => Object.assign(m, { commons: true }))].sort((a, b) => a[2] - b[2]);
+  }).catch(() => {});
 }
 
 // The pins for a year: [{ position, ids }], one per square of `cell` degrees with a picture in it,
@@ -28,6 +33,12 @@ export function photoPins(year, cell) {
 }
 
 export function photo(i) {
+  if (photos[i].commons) {
+    const [, , taken, name, author, licence] = photos[i];
+    const page = `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(name.replace(/ /g, "_"))}`;
+    return { commons: true, year: String(taken), title: name.replace(/\.[a-z]+$/i, "").replace(/_/g, " "), author, licence, page,
+      image: `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(name.replace(/ /g, "_"))}?width=900` };
+  }
   const [, , year, about, file, title, citation] = photos[i];
   return { year: `${about ? "about " : ""}${year}`, title, citation, image: `${base}${file}.jpg` };
 }

@@ -1,5 +1,32 @@
 // The site's Worker. Everything is a static file except the archive photographs, which come out
 // of the R2 bucket PHOTOS (copied there once from OldTO's storage; see pipeline/photos.py).
+import { EmailMessage } from "cloudflare:email";
+
+const REPORT_FROM = "report@torontothroughtime.com";
+
+// A note from the "Report a bug" form, as an email to the address in wrangler.jsonc (MAIL).
+async function report(request, env) {
+  const note = await request.json().catch(() => null);
+  const text = String(note?.text ?? "").trim().slice(0, 4000);
+  if (!text) return new Response("Nothing to send", { status: 400 });
+  if (note.website) return new Response(null, { status: 204 });     // a field people cannot see: filled in by robots only
+  const email = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(String(note.email ?? "")) ? String(note.email).slice(0, 200) : "";
+  const line = (v) => String(v ?? "").replace(/[\r\n]+/g, " ").slice(0, 120);
+  const body = `${text}\n\nFrom: ${email || "no address given"}\nYear: ${line(note.year)}\nMap: ${line(note.view)}\nCountry: ${request.cf?.country ?? "?"}\n`;
+  const bytes = new TextEncoder().encode(body);
+  let b64 = "";
+  for (let i = 0; i < bytes.length; i += 57) b64 += btoa(String.fromCharCode(...bytes.subarray(i, i + 57))) + "\r\n";
+  const raw = [`From: Toronto Through Time <${REPORT_FROM}>`, `To: ${env.REPORT_TO}`, ...(email ? [`Reply-To: ${email}`] : []),
+    "Subject: Map report", `Message-ID: <${crypto.randomUUID()}@torontothroughtime.com>`, `Date: ${new Date().toUTCString()}`,
+    "MIME-Version: 1.0", "Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: base64", "", b64].join("\r\n");
+  try {
+    await env.MAIL.send(new EmailMessage(REPORT_FROM, env.REPORT_TO, raw));
+  } catch (e) {
+    console.error("report not sent:", e.message);
+    return new Response("Not sent", { status: 502 });
+  }
+  return new Response(null, { status: 204 });
+}
 
 export default {
   async fetch(request, env) {
@@ -11,6 +38,7 @@ export default {
     }
     // Whether to ask this visitor before loading the Google tag (public/consent.js): yes in the
     // EU, the rest of the EEA, the UK and Switzerland, and where the country is not known.
+    if (url.pathname === "/report") return request.method === "POST" ? report(request, env) : new Response("Not here", { status: 405 });
     if (url.pathname === "/geo") {
       const country = request.cf?.country;
       const ask = !country || request.cf?.isEUCountry === "1" || ["GB", "CH", "NO", "IS", "LI"].includes(country);

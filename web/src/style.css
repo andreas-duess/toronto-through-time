@@ -125,6 +125,19 @@ html, body {
 #info table { border-collapse: collapse; }
 #info td { padding: 2px 10px 2px 0; vertical-align: top; }
 #info td:first-child { color: var(--muted); }
+#report { width: 380px; max-width: calc(100vw - 32px); box-sizing: border-box; padding: 20px 22px; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 8px 28px rgba(24,24,27,0.18); font: 14px/1.5 var(--sans); color: var(--ink); }
+#report::backdrop { background: rgba(24,24,27,0.35); }
+#report h3 { margin: 0 0 6px; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+#report p { margin: 0 0 12px; }
+#report label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+#report textarea, #report input { display: block; width: 100%; box-sizing: border-box; margin-bottom: 12px; padding: 8px 10px; font: inherit; color: inherit; border: 1px solid var(--line); border-radius: 8px; resize: vertical; }
+#report textarea:focus, #report input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+#report .trap { position: absolute; left: -9999px; width: 1px; }
+#report .small { font-size: 12.5px; color: var(--muted); }
+#report .about { margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
+#report-send { height: 40px; padding: 0 22px; border: 0; border-radius: 10px; background: var(--accent); color: #fff; font: 600 14px var(--sans); cursor: pointer; }
+#report-send:disabled { opacity: 0.6; cursor: default; }
+#report .close { position: absolute; top: 10px; right: 10px; border: 0; background: none; font-size: 14px; cursor: pointer; color: var(--muted); }
 #info .close { position: absolute; top: 8px; right: 8px; border: 0; background: none; font-size: 14px; cursor: pointer; color: var(--muted); }
 
 #controls {
