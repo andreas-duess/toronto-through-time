@@ -62,7 +62,13 @@ if __name__ == "__main__":
 
     b, limits = build.load_buildings(area)
     b["year"] = TODAY          # as it stands today; years from 1998 on are a later step
-    b = b.reset_index(drop=True)
+    # An outline in several pieces becomes several outlines. Written as one it has no outer ring,
+    # so no corners, and the page then draws every building after it in the cell from the wrong corners.
+    b = b.explode(index_parts=False).reset_index(drop=True)
+    b = b[(b.geometry.geom_type == "Polygon") & (b.geometry.area >= 8)].reset_index(drop=True)
+    b["area"] = b.geometry.area
+    corners = shapely.get_num_coordinates(shapely.get_exterior_ring(shapely.simplify(b.geometry.to_crs(4326).values, 2e-6)))
+    b = b[corners >= 4].reset_index(drop=True)
     roof_of, middle, info = build.roofs(b)        # lowers the walls of the houses to their eaves
     roof_at = np.full(len(b), -1)
     roof_at[roof_of] = np.arange(len(roof_of))
