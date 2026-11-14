@@ -36,7 +36,7 @@ export function photo(i) {
   if (photos[i].commons) {
     const [, , taken, name, author, licence] = photos[i];
     const page = `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(name.replace(/ /g, "_"))}`;
-    return { commons: true, year: String(taken), title: name.replace(/\.[a-z]+$/i, "").replace(/_/g, " "), author, licence, page,
+    return { commons: true, year: String(taken), title: name.replace(/\.[a-z]+$/i, "").replace(/_/g, " ").replace(/ \(\d{6,}\)/g, ""), author, licence, page,
       image: `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(name.replace(/ /g, "_"))}?width=900` };
   }
   const [, , year, about, file, title, citation] = photos[i];

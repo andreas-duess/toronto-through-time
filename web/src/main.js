@@ -539,8 +539,8 @@ const CAMERA_ICON = cameraIcon();
 const photosShow = { on: true, loaded: false, key: "", pins: [] };
 function photoLayer() {
   const size = Math.min(28, Math.max(14, 14 + (map.getZoom() - PHOTO_ZOOM) * 5));
-  // pictures closer than a pin's width (in degrees of longitude) share a pin
-  const cell = (size * 360) / (512 * 2 ** (Math.round(map.getZoom() * 2) / 2));
+  // pictures closer than two and a half pin widths (in degrees of longitude) share a pin
+  const cell = (2.5 * size * 360) / (512 * 2 ** (Math.round(map.getZoom() * 2) / 2));
   const key = `${Math.floor(state.year)}|${cell}`;
   if (key !== photosShow.key) Object.assign(photosShow, { key, pins: photoPins(Math.floor(state.year), cell) });
   return new IconLayer({

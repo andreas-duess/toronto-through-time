@@ -42,6 +42,8 @@ uv run pipeline/narrate.py     # the story read aloud (ElevenLabs), after any ch
 uv run --no-project --python 3.12 --with fiona --with geopandas --with pyproj pipeline/shapes.py   # real shapes of big buildings, before build.py
 uv run pipeline/photos.py      # archive photographs (needs data/raw/oldto/images.geojson from github.com/sidewalklabs/oldto);
                                # the pictures themselves are in the R2 bucket toronto-through-time-photos, served by web/worker.js
+uv run --with shapely pipeline/commons.py   # photographs from Wikimedia Commons, 1990 on (slow the first time; answers are kept in data/raw/commons)
+uv run --with geopandas --with pillow pipeline/figures.py   # pictures of the sources for the "How it was made" page
 uv run pipeline/pack.py        # last: small copies of the building files for the page
 ```
 

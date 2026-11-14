@@ -13,7 +13,7 @@ the licences ask for along with the author's name.
 Writes [[lon, lat, year, file name, author, licence], ...] in order of year. The answers from
 Commons are kept in data/raw/commons/ so that a second run only asks for what is new.
 
-Run: uv run pipeline/commons.py
+Run: uv run --with shapely pipeline/commons.py
 """
 import html
 import json
@@ -88,6 +88,10 @@ if __name__ == "__main__":
             print(f"  facts for {i:,} of {len(todo):,}", flush=True)
     facts_file.write_text(json.dumps(facts))
 
+    # only what lies inside the city, and nothing taken from orbit
+    import shapely
+    city = shapely.union_all([shapely.geometry.shape(f["geometry"]) for f in json.loads((ROOT / "data" / "raw" / "former_municipalities.geojson").read_text())["features"]])
+    shapely.prepare(city)
     rows, spots = [], {}
     for pid, (lat, lon) in sorted(places.items()):
         name, taken, author, licence, mime, width = facts.get(str(pid), [""] * 6)
@@ -95,6 +99,8 @@ if __name__ == "__main__":
         if not year or mime != "image/jpeg" or (width or 0) < 800 or not re.match(r"CC|Public domain", licence or ""):
             continue
         y = int(year.group())
+        if re.match(r"ISS\d", name) or not city.contains(shapely.Point(lon, lat)):
+            continue
         if not FIRST_YEAR <= y <= 2026:
             continue
         spot = (round(lat / SPOT), round(lon / SPOT), y)
