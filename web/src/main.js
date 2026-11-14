@@ -191,7 +191,7 @@ const map = new maplibregl.Map({
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
 map.on("moveend", writeHash);
 // the districts outside the old city are loaded for wherever the map comes to rest
-map.on("moveend", () => { if (meta && districts.some((d) => state.year >= d.from)) render(); });
+map.on("moveend", () => { if (meta && districts.some((d) => state.year >= d.ground)) render(); });
 // A tip beside the zoom buttons on how to turn the map. It stays.
 {
   const hint = document.getElementById("rotate-hint");
@@ -331,12 +331,15 @@ function districtLayers() {
     })] : []),
   ]);
 }
-// a district's streets and parks, added to the map the first time its years come up
+// A district's streets and parks, from the year it joined the city (d.ground): added to the map the
+// first time its years come up with the district in view.
 function districtGround(year) {
   if (!map.getLayer("streets")) return;
+  const v = map.getBounds();
   for (const d of districts) {
-    const on = year >= d.from;
-    if (on && !map.getSource(`d-${d.slug}-streets`)) {
+    const on = year >= d.ground;
+    const inView = d.box[0] < v.getEast() && d.box[2] > v.getWest() && d.box[1] < v.getNorth() && d.box[3] > v.getSouth();
+    if (on && inView && !map.getSource(`d-${d.slug}-streets`)) {
       map.addSource(`d-${d.slug}-parks`, { type: "geojson", data: d.dir + "parks.json" });
       map.addLayer({ id: `d-${d.slug}-parks`, type: "fill", source: `d-${d.slug}-parks`, paint: { "fill-color": PARK_COLOR } }, "water");
       map.addSource(`d-${d.slug}-streets`, { type: "geojson", data: d.dir + "streets.json" });
@@ -724,7 +727,7 @@ async function load() {
   events = await fetchJson("events.json").catch(() => null);
   fetchJson("poppies.json").then((p) => { poppies = p; render(); }).catch(() => {});
   fetchJson("pearson.json").then((p) => { pearson = p; render(); }).catch(() => {});
-  loadDistricts(DATA, ["etobicoke"]).then((d) => { districts = d; render(); });
+  loadDistricts(DATA, ["etobicoke", "york", "north_york", "east_york", "scarborough"]).then((d) => { districts = d; render(); });
   fetchJson("chargers.json").then((c) => { chargers = c; render(); }).catch(() => {});
   state.year = opened.year >= meta.firstYear && opened.year <= meta.lastYear ? opened.year : meta.firstYear;
   setupControls();

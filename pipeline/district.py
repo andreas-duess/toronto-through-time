@@ -15,7 +15,7 @@ of CELL_M metres, one file each (cell.<n>.bin, gzip), and an index:
   streets.json: lines with kind (as streets.json has it) and name
   parks.json: polygons
 
-Run: uv run pipeline/district.py ETOBICOKE
+Run: uv run pipeline/district.py ETOBICOKE      (with --ground: its streets and parks only, from 1998)
 """
 import gzip
 import json
@@ -52,56 +52,71 @@ def cell_file(b, roof_of, middle, info):
     return gzip.compress(b"".join(parts), 9, mtime=0)
 
 
+JOINED = 1998     # the year the six municipalities became one city
+
+
 if __name__ == "__main__":
     area = sys.argv[1].upper()
+    ground_only = "--ground" in sys.argv        # streets and parks only; the buildings come later
     slug = area.lower().replace(" ", "_")
     out = ROOT / "web" / "public" / "data" / "d" / slug
     out.mkdir(parents=True, exist_ok=True)
     for old in out.glob("cell.*.bin"):
         old.unlink()
 
-    b, limits = build.load_buildings(area)
-    b["year"] = TODAY          # as it stands today; years from 1998 on are a later step
-    # An outline in several pieces becomes several outlines. Written as one it has no outer ring,
-    # so no corners, and the page then draws every building after it in the cell from the wrong corners.
-    b = b.explode(index_parts=False).reset_index(drop=True)
-    b = b[(b.geometry.geom_type == "Polygon") & (b.geometry.area >= 8)].reset_index(drop=True)
-    b["area"] = b.geometry.area
-    corners = shapely.get_num_coordinates(shapely.get_exterior_ring(shapely.simplify(b.geometry.to_crs(4326).values, 2e-6)))
-    b = b[corners >= 4].reset_index(drop=True)
-    roof_of, middle, info = build.roofs(b)        # lowers the walls of the houses to their eaves
-    roof_at = np.full(len(b), -1)
-    roof_at[roof_of] = np.arange(len(roof_of))
+    cells, size, n_buildings, n_roofs = [], 0, 0, 0
+    if ground_only:
+        limits = gpd.read_file(RAW / "former_municipalities.geojson")
+        limits = limits[limits.AREA_NAME == area].to_crs(build.UTM).geometry.iloc[0]
+    else:
+        b, limits = build.load_buildings(area)
+        b["year"] = TODAY          # as it stands today; years from 1998 on are a later step
+        # An outline in several pieces becomes several outlines. Written as one it has no outer ring,
+        # so no corners, and the page then draws every building after it in the cell from the wrong corners.
+        b = b.explode(index_parts=False).reset_index(drop=True)
+        b = b[(b.geometry.geom_type == "Polygon") & (b.geometry.area >= 8)].reset_index(drop=True)
+        b["area"] = b.geometry.area
+        corners = shapely.get_num_coordinates(shapely.get_exterior_ring(shapely.simplify(b.geometry.to_crs(4326).values, 2e-6)))
+        b = b[corners >= 4].reset_index(drop=True)
+        roof_of, middle, info = build.roofs(b)        # lowers the walls of the houses to their eaves
+        roof_at = np.full(len(b), -1)
+        roof_at[roof_of] = np.arange(len(roof_of))
+        n_buildings, n_roofs = len(b), len(roof_of)
 
-    cen = b.geometry.centroid
-    cx, cy = np.floor(cen.x / CELL_M).astype(int), np.floor(cen.y / CELL_M).astype(int)
-    cells, size = [], 0
-    for n, (x, y) in enumerate(sorted(set(zip(cx, cy)))):
-        rows = np.flatnonzero((cx == x) & (cy == y))
-        mine = b.iloc[rows]
-        has = roof_at[rows] >= 0
-        data = cell_file(mine, np.flatnonzero(has), middle[roof_at[rows][has]], info[roof_at[rows][has]])
-        (out / f"cell.{n}.bin").write_bytes(data)
-        size += len(data)
-        w, s, e, nn = mine.to_crs(4326).total_bounds
-        cells.append({"file": f"cell.{n}.bin", "box": [round(w, 5), round(s, 5), round(e, 5), round(nn, 5)], "buildings": len(mine)})
+        cen = b.geometry.centroid
+        cx, cy = np.floor(cen.x / CELL_M).astype(int), np.floor(cen.y / CELL_M).astype(int)
+        for n, (x, y) in enumerate(sorted(set(zip(cx, cy)))):
+            rows = np.flatnonzero((cx == x) & (cy == y))
+            mine = b.iloc[rows]
+            has = roof_at[rows] >= 0
+            data = cell_file(mine, np.flatnonzero(has), middle[roof_at[rows][has]], info[roof_at[rows][has]])
+            (out / f"cell.{n}.bin").write_bytes(data)
+            size += len(data)
+            w, s_, e, nn = mine.to_crs(4326).total_bounds
+            cells.append({"file": f"cell.{n}.bin", "box": [round(w, 5), round(s_, 5), round(e, 5), round(nn, 5)], "buildings": len(mine)})
 
-    # streets: the City's centreline inside the district, by kind
+    # Streets: the City's centreline inside the district, by kind, one line (or several) per street
+    # name. They are today's streets, shown from the year the district joined the city: a street
+    # laid out since then is on the map too early.
     centre = gpd.read_file(RAW / "centreline.gpkg").to_crs(build.UTM)
     centre = centre[centre.intersects(limits)]
     centre["kind"] = centre.FEATURE_CODE_DESC.map(streets_.KINDS)
     centre = centre[centre.kind.notna()]
     lines = gpd.GeoDataFrame({"kind": centre.kind.astype(int), "name": centre.LINEAR_NAME_FULL.fillna("")},
-                             geometry=shapely.simplify(centre.geometry.intersection(limits).values, 2), crs=build.UTM)
-    lines = lines[~lines.geometry.is_empty].to_crs(4326)
-    lines["geometry"] = shapely.set_precision(lines.geometry.values, 1e-6)
-    (out / "streets.json").write_text(lines.to_json(drop_id=True))
+                             geometry=centre.geometry.intersection(limits).values, crs=build.UTM)
+    lines = lines[~lines.geometry.is_empty].dissolve(["name", "kind"]).reset_index()
+    lines["geometry"] = shapely.simplify(shapely.line_merge(lines.geometry.values), 2.5)
+    lines = lines.to_crs(4326)
+    lines["geometry"] = shapely.set_precision(lines.geometry.values, 1e-5)
+    (out / "streets.json").write_text(lines[~lines.geometry.is_empty].to_json(drop_id=True))
     parks = gpd.read_file(RAW / "green_spaces.geojson").to_crs(build.UTM)
     parks = parks[parks.intersects(limits)]
-    parks = gpd.GeoDataFrame(geometry=shapely.simplify(shapely.make_valid(parks.geometry.values), 3), crs=build.UTM).to_crs(4326)
-    parks["geometry"] = shapely.set_precision(parks.geometry.values, 1e-6)
+    parks = gpd.GeoDataFrame(geometry=shapely.simplify(shapely.make_valid(parks.geometry.values), 4), crs=build.UTM).to_crs(4326)
+    parks["geometry"] = shapely.set_precision(parks.geometry.values, 1e-5)
     (out / "parks.json").write_text(parks[~parks.geometry.is_empty].to_json(drop_id=True))
 
-    (out / "index.json").write_text(json.dumps({"name": area.title(), "from": TODAY, "origin": build.ORIGIN, "cells": cells}))
-    print(f"{area.title()}: {len(b):,} buildings, {len(roof_of):,} sloped roofs, {len(cells)} cells, {size / 1e6:.1f} MB;",
+    w, s_, e, nn = gpd.GeoSeries([limits], crs=build.UTM).to_crs(4326).total_bounds
+    (out / "index.json").write_text(json.dumps({"name": area.title(), "ground": JOINED, "from": TODAY, "origin": build.ORIGIN,
+                                                "box": [round(w, 4), round(s_, 4), round(e, 4), round(nn, 4)], "cells": cells}))
+    print(f"{area.title()}: {n_buildings:,} buildings, {n_roofs:,} sloped roofs, {len(cells)} cells, {size / 1e6:.1f} MB;",
           f"streets {(out / 'streets.json').stat().st_size / 1e6:.1f} MB, parks {(out / 'parks.json').stat().st_size / 1e6:.1f} MB")
