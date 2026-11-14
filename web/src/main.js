@@ -198,7 +198,7 @@ map.on("moveend", writeHash);
 // the trees come and go with the zoom
 let treesOn = 0;
 let bikesShown = false;
-map.on("zoom", () => { if (meta && (treeSets() !== treesOn || transitOn() || planesOn() || bikesOn() || bikesShown || photosShow.on || poppiesOn())) render(); });
+map.on("zoom", () => { if (meta && (treeSets() !== treesOn || transitOn() || planesOn() || bikesOn() || bikesShown || photosShow.on || poppiesOn() || live.chargers)) render(); });
 // and so do the batches of buildings, with the view
 let drawn = "";
 map.on("move", () => { if (buildings && drawnKey() !== drawn) render(); });
@@ -241,7 +241,7 @@ const TRUE_SIZE_ZOOM = 16;
 const STREETCAR = { size: [30, 2.5, 3.4], color: [200, 32, 38] };
 const BUS = { size: [12, 2.5, 3], color: [58, 74, 96] };
 // the switches of the two live layers in the panel
-const live = { transit: true, bikes: true, planes: true, weather: true };
+const live = { transit: true, bikes: true, planes: true, weather: true, chargers: true };
 const transitOn = () => live.transit && Boolean(meta) && state.year >= meta.lastYear - 0.05 && map.getZoom() >= TRANSIT_ZOOM && !document.hidden;
 function transitLayer() {
   const larger = Math.max(1, 2 ** (TRUE_SIZE_ZOOM - map.getZoom()) * 0.75);
@@ -475,6 +475,48 @@ function showPhotos(ids, n) {
   box.querySelector(".next")?.addEventListener("click", () => showPhotos(ids, (n + 1) % ids.length));
 }
 
+// Public charging stations for electric cars (pipeline/chargers.py), each from the year it opened:
+// a lightning bolt on a disc, red for Tesla's and green for the rest.
+// [lon, lat, name, network, address, level 2 chargers, fast chargers, plugs, year opened]
+const CHARGER_ZOOM = 12.5;
+const CHARGER_ICONS = (() => {
+  const c = document.createElement("canvas");
+  c.width = 128; c.height = 64;
+  const g = c.getContext("2d");
+  ["#c81e1e", "#15803d"].forEach((colour, i) => {
+    g.beginPath(); g.arc(32 + i * 64, 32, 29, 0, 6.3); g.fillStyle = colour; g.fill();
+    g.lineWidth = 4; g.strokeStyle = "#fff"; g.stroke();
+    g.beginPath();
+    for (const [x, y] of [[37, 10], [19, 36], [30, 36], [26, 54], [45, 27], [34, 27]]) g.lineTo(x + i * 64, y);
+    g.closePath(); g.fillStyle = "#fff"; g.fill();
+  });
+  return c.toDataURL();
+})();
+const isTesla = (c) => c[3].startsWith("Tesla");
+let chargers = null;
+const chargersShow = { year: null, list: [] };
+const chargersOn = () => live.chargers && chargers && map.getZoom() >= CHARGER_ZOOM && state.year >= chargers[0][8];
+function chargerLayer() {
+  const y = Math.floor(state.year);
+  if (y !== chargersShow.year) Object.assign(chargersShow, { year: y, list: chargers.filter((c) => c[8] <= y) });
+  const size = Math.min(26, Math.max(9, 9 + (map.getZoom() - CHARGER_ZOOM) * 4.5));
+  return new IconLayer({
+    id: "chargers",
+    beforeId: map.getLayer("places-city") ? "places-city" : undefined,
+    data: chargersShow.list,
+    iconAtlas: CHARGER_ICONS,
+    iconMapping: { tesla: { x: 0, y: 0, width: 64, height: 64, anchorY: 64 }, other: { x: 64, y: 0, width: 64, height: 64, anchorY: 64 } },
+    getIcon: (c) => (isTesla(c) ? "tesla" : "other"),
+    getPosition: (c) => [c[0], c[1], 0],
+    getSize: (c) => (isTesla(c) ? size * 1.25 : size),
+    updateTriggers: { getSize: size },
+    sizeUnits: "pixels",
+    // seen through the buildings: most chargers are inside parking garages
+    parameters: { depthCompare: "always", depthWriteEnabled: false },
+    pickable: true,
+  });
+}
+
 // Today's weather, in today's year: cloud dims the sun, rain and snow fall over the map, and
 // lying snow whitens the ground and the sloped roofs.
 const SNOW = "#f4f5f3";
@@ -608,6 +650,7 @@ async function load() {
   events = await fetchJson("events.json").catch(() => null);
   fetchJson("poppies.json").then((p) => { poppies = p; render(); }).catch(() => {});
   fetchJson("pearson.json").then((p) => { pearson = p; render(); }).catch(() => {});
+  fetchJson("chargers.json").then((c) => { chargers = c; render(); }).catch(() => {});
   state.year = opened.year >= meta.firstYear && opened.year <= meta.lastYear ? opened.year : meta.firstYear;
   setupControls();
   render();
@@ -1059,7 +1102,7 @@ function render() {
   fadeEvents(state.year);
   updateAerial();
   const model = aerial.shown === null;
-  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(model && lost ? lostLayers() : []), ...(model ? buildingLayers() : []), ...(model && roofs ? roofLayers() : []), ...(model ? landmarkLayers() : []), ...(model && trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(poppiesOn() ? [poppyLayer()] : []), ...(photosOn() ? [photoLayer()] : []), ...(pearson && state.year >= meta.lastYear ? [pearsonLayer()] : []), ...(transitOn() ? [transitLayer()] : []), ...(planesOn() ? [planeLayer()] : [])] });
+  overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(model && lost ? lostLayers() : []), ...(model ? buildingLayers() : []), ...(model && roofs ? roofLayers() : []), ...(model ? landmarkLayers() : []), ...(model && trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(chargersOn() ? [chargerLayer()] : []), ...(poppiesOn() ? [poppyLayer()] : []), ...(photosOn() ? [photoLayer()] : []), ...(pearson && state.year >= meta.lastYear ? [pearsonLayer()] : []), ...(transitOn() ? [transitLayer()] : []), ...(planesOn() ? [planeLayer()] : [])] });
   runTransit();
   watchBikes(bikesOn(), render);
   treesOn = treeSets();
@@ -1154,7 +1197,7 @@ function setupPanel() {
       about.setAttribute("aria-expanded", String(!more.hidden));
     });
   }
-  for (const key of ["transit", "bikes", "planes", "weather"]) {
+  for (const key of ["transit", "bikes", "planes", "weather", "chargers"]) {
     $(key).addEventListener("click", () => {
       live[key] = !live[key];
       $(key).setAttribute("aria-pressed", String(live[key]));
@@ -1362,6 +1405,13 @@ function closeStory() {
 
 function showBuilding(info) {
   if (info.picked && info.layer?.id === "photos") return showPhotos(info.object.ids, 0);
+  if (info.picked && info.layer?.id === "chargers") {
+    const [, , name, network, address, slow, fast, plugs, year] = info.object;
+    const count = [slow ? `${slow} regular (Level 2)` : "", fast ? `${fast} fast` : ""].filter(Boolean).join(", ");
+    return showInfo(name || "Charging station", [["Network", network === "Tesla" ? "Tesla Supercharger" : network], ["Address", address],
+      ...(count ? [["Chargers", count]] : []), ...(plugs ? [["Plugs", plugs]] : []), ["Opened", year],
+      ["From", "Alternative Fuels Station Locator (Natural Resources Canada and the US Department of Energy)"]]);
+  }
   if (info.picked && info.layer?.id === "poppies") {
     return showInfo(info.object[2], [["", "Someone from this home died in the Second World War."],
       ["How we know", `From a published map of Toronto's war dead, which lists home addresses.${info.object[3] ? " This house number is not there today, so the poppy is at the nearest one." : ""}`]]);
