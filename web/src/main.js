@@ -476,7 +476,7 @@ function showPhotos(ids, n) {
 }
 
 // Public charging stations for electric cars (pipeline/chargers.py), each from the year it opened:
-// a lightning bolt on a disc, red for Tesla's and green for the rest.
+// a lightning bolt on a disc, red for Tesla's Superchargers and green for the rest.
 // [lon, lat, name, network, address, level 2 chargers, fast chargers, plugs, year opened]
 const CHARGER_ZOOM = 12.5;
 const CHARGER_ICONS = (() => {
@@ -492,7 +492,8 @@ const CHARGER_ICONS = (() => {
   });
   return c.toDataURL();
 })();
-const isTesla = (c) => c[3].startsWith("Tesla");
+// red for Tesla's Superchargers only; its slower "destination" chargers are green with the rest
+const isTesla = (c) => c[3] === "Tesla";
 let chargers = null;
 const chargersShow = { year: null, list: [] };
 const chargersOn = () => live.chargers && chargers && map.getZoom() >= CHARGER_ZOOM && state.year >= chargers[0][8];
