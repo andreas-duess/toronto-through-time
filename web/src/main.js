@@ -1092,11 +1092,12 @@ function addMapLayers() {
     layout: { "line-cap": "round", "line-join": "round" },
     paint: { "line-color": STREET_COLOR, "line-width": streetWidth(0.82) } });
 
-  // hills and valleys as shading on the flat ground (pipeline/relief.py): under the water, over the parks
+  // hills and valleys as shading on the flat ground (pipeline/relief.py): over the parks, the woods and
+  // the old land, under the marsh and each year's water
   map.addSource("relief", { type: "raster-dem", tiles: [new URL("./relief/", location.href).href + "{z}/{x}/{y}.png"], encoding: "terrarium",
     tileSize: 256, minzoom: 10, maxzoom: 14, bounds: [-79.66, 43.56, -79.09, 43.88] });
   map.addLayer({ id: "relief", type: "hillshade", source: "relief",
-    paint: { "hillshade-exaggeration": 0.85, "hillshade-shadow-color": "#5b5142", "hillshade-highlight-color": "#ffffff", "hillshade-accent-color": "#5b5142" } }, "water");
+    paint: { "hillshade-exaggeration": 0.85, "hillshade-shadow-color": "#5b5142", "hillshade-highlight-color": "#ffffff", "hillshade-accent-color": "#5b5142" } }, "marsh");
 
   // railways: a dark line with sleepers
   map.addSource("rail", { type: "geojson", data: rail });
