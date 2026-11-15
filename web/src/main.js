@@ -244,7 +244,7 @@ const TRUE_SIZE_ZOOM = 16;
 const STREETCAR = { size: [30, 2.5, 3.4], color: [200, 32, 38] };
 const BUS = { size: [12, 2.5, 3], color: [58, 74, 96] };
 // the switches of the two live layers in the panel
-const live = { transit: true, bikes: true, planes: true, weather: true, chargers: true, solid: true };
+const live = { transit: true, bikes: true, planes: true, weather: true, chargers: true, solid: true, relief: true };
 const transitOn = () => live.transit && Boolean(meta) && state.year >= meta.lastYear - 0.05 && map.getZoom() >= TRANSIT_ZOOM && !document.hidden;
 function transitLayer() {
   const larger = Math.max(1, 2 ** (TRUE_SIZE_ZOOM - map.getZoom()) * 0.75);
@@ -1092,6 +1092,12 @@ function addMapLayers() {
     layout: { "line-cap": "round", "line-join": "round" },
     paint: { "line-color": STREET_COLOR, "line-width": streetWidth(0.82) } });
 
+  // hills and valleys as shading on the flat ground (pipeline/relief.py): under the water, over the parks
+  map.addSource("relief", { type: "raster-dem", tiles: [new URL("./relief/", location.href).href + "{z}/{x}/{y}.png"], encoding: "terrarium",
+    tileSize: 256, minzoom: 10, maxzoom: 14, bounds: [-79.66, 43.56, -79.09, 43.88] });
+  map.addLayer({ id: "relief", type: "hillshade", source: "relief",
+    paint: { "hillshade-exaggeration": 0.85, "hillshade-shadow-color": "#5b5142", "hillshade-highlight-color": "#ffffff", "hillshade-accent-color": "#5b5142" } }, "water");
+
   // railways: a dark line with sleepers
   map.addSource("rail", { type: "geojson", data: rail });
   map.addLayer({ id: "rail", type: "line", source: "rail",
@@ -1250,6 +1256,7 @@ function render() {
   const model = aerial.shown === null;
   const solid = model || live.solid;
   $("solid").disabled = model;
+  if (map.getLayer("relief")) map.setLayoutProperty("relief", "visibility", live.relief && model ? "visible" : "none");
   overlay.setProps({ layers: [...(SHADOWS ? [groundLayer()] : []), ...(solid && lost ? lostLayers() : []), ...(solid ? buildingLayers() : []), ...(solid && roofs ? roofLayers() : []), ...(solid ? landmarkLayers() : []), ...(model && trees ? treeLayers() : []), ...(bikesOn() ? [bikeLayer()] : []), ...(chargersOn() ? [chargerLayer()] : []), ...(poppiesOn() ? [poppyLayer()] : []), ...(photosOn() ? [photoLayer()] : []), ...(solid ? districtLayers(model) : []), ...(solid && pearson && state.year >= meta.lastYear ? [pearsonLayer()] : []), ...(transitOn() ? [transitLayer()] : []), ...(planesOn() ? [planeLayer()] : [])] });
   runTransit();
   watchBikes(bikesOn(), render);
@@ -1350,7 +1357,7 @@ function setupPanel() {
       about.setAttribute("aria-expanded", String(!more.hidden));
     });
   }
-  for (const key of ["transit", "bikes", "planes", "weather", "chargers", "solid"]) {
+  for (const key of ["transit", "bikes", "planes", "weather", "chargers", "solid", "relief"]) {
     $(key).addEventListener("click", () => {
       live[key] = !live[key];
       $(key).setAttribute("aria-pressed", String(live[key]));
