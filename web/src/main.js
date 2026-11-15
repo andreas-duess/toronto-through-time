@@ -1099,6 +1099,14 @@ function addMapLayers() {
   map.addLayer({ id: "rail-ties", type: "line", source: "rail", minzoom: 13,
     paint: { "line-color": "#6f675b", "line-dasharray": [0.15, 1.6],
       "line-width": ["interpolate", ["linear"], ["zoom"], 13, 3, 17, 8] } });
+  // the same lines outside the old city, where the map has no history: today's tracks, from 1998
+  // like the streets there (pipeline/rail_city.py)
+  map.addSource("rail-city", { type: "geojson", data: DATA + "rail_city.json" });
+  map.addLayer({ id: "rail-city", type: "line", source: "rail-city",
+    paint: { "line-color": "#6f675b", "line-width": ["interpolate", ["linear"], ["zoom"], 11, 0.8, 17, 2] } });
+  map.addLayer({ id: "rail-city-ties", type: "line", source: "rail-city", minzoom: 13,
+    paint: { "line-color": "#6f675b", "line-dasharray": [0.15, 1.6],
+      "line-width": ["interpolate", ["linear"], ["zoom"], 13, 3, 17, 8] } });
 
   map.addSource("street-labels", { type: "geojson", data: streetLabels });
   map.addLayer({ id: "street-labels", type: "symbol", source: "street-labels", minzoom: 13.5,
@@ -1195,6 +1203,8 @@ function updateMap(year) {
   const running = ["all", built, [">", ["get", "end"], y]];
   map.setFilter("rail", running);
   map.setFilter("rail-ties", running);
+  map.setFilter("rail-city", ["<=", ["get", "y"], y]);
+  map.setFilter("rail-city-ties", ["<=", ["get", "y"], y]);
   for (const kind of Object.keys(PLACE_STYLE)) {
     map.setFilter(`places-${kind}`, ["all", ["==", ["get", "kind"], kind], ["<=", ["get", "from"], y], [">", ["get", "to"], y]]);
   }
