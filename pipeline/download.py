@@ -62,8 +62,15 @@ OVERPASS = {
                           + "".join(f'nwr{box}[~"^(building|building:part)$"~"."];' for box in (
                               "(43.6772,-79.4105,43.6790,-79.4080)", "(43.6520,-79.3925,43.6540,-79.3905)",
                               "(43.6498,-79.3748,43.6512,-79.3732)", "(43.6662,-79.3962,43.6690,-79.3930)",
-                              "(43.6522,-79.3945,43.6545,-79.3910)"))
-                          + ');out tags geom;',
+                              "(43.6522,-79.3945,43.6545,-79.3910)",
+                              # Old City Hall, the Legislature, University College, St. Michael's,
+                              # Metropolitan United, Holy Trinity, Union Station
+                              "(43.6514,-79.3835,43.6536,-79.3805)", "(43.6605,-79.3935,43.6640,-79.3890)",
+                              "(43.6612,-79.3970,43.6635,-79.3935)", "(43.6538,-79.3785,43.6560,-79.3758)",
+                              "(43.6528,-79.3765,43.6548,-79.3740)", "(43.6535,-79.3820,43.6550,-79.3797)",
+                              "(43.6433,-79.3820,43.6458,-79.3785)"))
+                          # relations with their members' geometry, for buildings mapped as multipolygons
+                          + ');out geom;',
     # places of worship, and the parts of buildings mapped in 3D (towers, spires), for the churches
     "osm/worship.json": f'[out:json][timeout:150];(way[amenity=place_of_worship]{BOX};relation[amenity=place_of_worship]{BOX};'
                         f'way[building~"^(church|cathedral|chapel|synagogue|mosque|temple)$"]{BOX};);out tags geom;',

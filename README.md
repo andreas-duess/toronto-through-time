@@ -62,8 +62,10 @@ buildings. `web/public/sources.html` has the full list with licences.
 ## Hand-built landmarks
 
 `web/src/landmarks.js` builds the CN Tower, the Rogers Centre, BMO Field, the old Trinity College,
-Casa Loma, St. James' Cathedral, OCAD with the Sharp Centre, the ROM and the Art Gallery from simple
-shapes; `pipeline/models.py` supplies their outlines from OpenStreetMap. Where OpenStreetMap maps a
+Casa Loma, St. James' Cathedral, OCAD with the Sharp Centre, the ROM, the Art Gallery, Old City Hall,
+the Legislative Building, University College, Union Station, St. Michael's Cathedral, Metropolitan
+United and the Church of the Holy Trinity from simple shapes (the last three drawn by hand along
+their outlines, `framed`); `pipeline/models.py` supplies their outlines from OpenStreetMap. Where OpenStreetMap maps a
 building in 3D (heights and roof shapes of each part, as for Casa Loma and St. James'), `osmPart`
 builds it from those parts. Where a building changed over the years (the ROM, the Art Gallery),
 `by_era` in `pipeline/models.py` cuts its parts into eras along rectangles read off the city's air
@@ -71,7 +73,7 @@ photos of 1939 to 1999; the ROM's terrace galleries, gone since 2005, are drawn 
 from photographs. To add one: a function that returns a mesh, an entry in `landmarkParts` with its
 construction years, and an entry in `FACTS`. The buildings a model stands in for are hidden by name
 (`replaces` in `FACTS`) or by outline (`hide` in `landmarks.json`: every building whose middle is
-inside). Names can be wrong (four of the Art Gallery's blocks carry the Sharp Centre's name), so
+inside, or, for a building round a courtyard, most of it; lost buildings too when still standing as the model is finished). Names can be wrong (four of the Art Gallery's blocks carry the Sharp Centre's name), so
 new models use outlines.
 
 ## Known limits

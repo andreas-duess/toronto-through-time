@@ -362,6 +362,106 @@ function ago({ parts }, era) {
   return m.build();
 }
 
+// A building from OpenStreetMap's parts, all of them or those of one era, in one wall colour and
+// one roof colour; domes take the third colour.
+function osmBuilding({ parts }, era, wall, roof, dome = roof) {
+  const m = new Mesh();
+  for (const p of parts.filter((q) => era === undefined || q.era === era)) {
+    osmPart(m, p, wall, ["dome", "onion", "round"].includes(p.shape) ? dome : roof);
+  }
+  return m.build();
+}
+
+// Old City Hall. Source: built 1889 to 1899 to E. J. Lennox's design, opened 18 September 1899;
+// clock tower 103.6 m; light brown-grey New Brunswick sandstone with darker reddish-brown Sackville
+// sandstone. Shapes and heights are OpenStreetMap's; colours are judged from a photograph.
+// The Ontario Legislative Building. Source: built from 1886 to Richard Waite's design, opened 4
+// April 1893; pink Credit Valley sandstone; G. W. Gouinlock's north wing, closing the courtyard,
+// 1909. The west wing, rebuilt after the fire of 1909 with a fourth floor under a gabled roof,
+// is shown as it is now from 1893. Shapes and heights are OpenStreetMap's; which part is the north
+// wing is read off the city's air photo; the domes' green is judged from a photograph.
+// University College. Source: built 1856 to 1859 to Cumberland and Storm's design; stone and pale
+// yellow brick; the Laidlaw wing completed in the 1960s (shown from 1964, judged). Shapes and
+// heights are OpenStreetMap's; which part is the Laidlaw wing is read off the city's air photo.
+// Union Station. Source: built 1914 to 1920 to Ross and Macdonald's design, opened 6 August 1927;
+// 229 m long; limestone; the train shed 1929 to 1930; the middle of the shed replaced by a glass
+// atrium from 2010 (shown done by 2015, judged). OpenStreetMap maps the Great Hall, the colonnade,
+// the sheds and the atrium; the office wings beside the hall are drawn 17 m high (pipeline/models.py).
+
+// The models below are drawn by hand along (u) and across (v) the longest side of each outline
+// (pipeline/models.py, uv_frame); every number is in metres in that frame.
+function framed([ax, ay]) {
+  const at = (u, v) => [ax * u - ay * v, ay * u + ax * v];
+  return { at, rect: (u0, u1, v0, v1) => [at(u0, v0), at(u1, v0), at(u1, v1), at(u0, v1)] };
+}
+const roofOver = (ring, eaves, ridge) => ({ ring, foot: eaves, top: ridge, roof: ridge - eaves, shape: "gabled" });
+
+// St. Michael's Cathedral Basilica. Source: built from 7 April 1845 to William Thomas's design,
+// dedicated 29 August 1848; the tower and spire, 79 m, by Gundry and Langley, 1865 to 1867; dormers
+// 1890; cream brick with stone, teal shingles. The outline and the tower and spire (to 40 m, the
+// spire above) are OpenStreetMap's, and so is the ridge at 27.8 m; the eaves at 14 m and the
+// dormers' number and size are judged from a photograph.
+function stMichaels({ axis, outline, spire }, piece) {
+  const { rect } = framed(axis);
+  const m = new Mesh();
+  if (piece === "church") {
+    m.color("#d8c59c").prism(outline, 0, 14);
+    osmPart(m, roofOver(rect(-12.9, 13.6, -35.4, 21.5), 14, 27.8), "#d8c59c", "#56676a");
+  } else if (piece === "spire") {
+    osmPart(m, spire, "#d8c59c", "#4b5559");
+  } else {
+    // nine on each slope, their sills where the roof is 3.8 m above the eaves
+    for (let v = -31; v <= 17; v += 6) {
+      for (const s of [-1, 1]) {
+        const u0 = 0.35 + s * 6.4, u1 = 0.35 + s * 9.6;
+        osmPart(m, { ring: rect(Math.min(u0, u1), Math.max(u0, u1), v - 1.1, v + 1.1), foot: 17.6, top: 21.6, roof: 1.5, shape: "gabled" },
+          "#e2d8c2", "#56676a");
+      }
+    }
+  }
+  return m.build();
+}
+
+// Metropolitan United Church. Source: built 1870 to 1872 to Henry Langley's design, of white brick
+// with cut stone; burned in 1928 but for the tower, parts of the south front and the porches;
+// rebuilt on the old foundations to J. Gibb Morton's design and opened December 1929. The outline
+// is OpenStreetMap's; every height, the corner pinnacles and the colours are judged from a
+// photograph, and the fire is shown at the start of 1928.
+function metropolitan({ axis, tower, body }, piece) {
+  const { rect } = framed(axis);
+  const m = new Mesh();
+  if (piece === "tower") {
+    m.color("#d6caa8").prism(tower, 0, 46);
+    for (const [u, v] of [[18.2, -3.5], [18.2, 3.7], [28.4, -3.5], [28.4, 3.7]]) {
+      osmPart(m, { ring: rect(u - 0.9, u + 0.9, v - 0.9, v + 0.9), foot: 46, top: 58, roof: 6, shape: "pyramidal" }, "#d6caa8", "#6e9c86");
+    }
+  } else {
+    m.color("#d6caa8").prism(body, 0, 15);
+    osmPart(m, roofOver(rect(-46.5, 17.3, -11, 11.2), 15, 26), "#d6caa8", "#646a6e");
+    osmPart(m, roofOver(rect(-20.9, -13, -16.9, 16.7), 15, 26), "#d6caa8", "#646a6e");
+  }
+  return m.build();
+}
+
+// The Church of the Holy Trinity. Source: built in 1847 to Henry Bowyer Lane's design, dedicated
+// 27 October 1847; late Gothic (Tudor) style, about five storeys tall, with two towers flanking
+// the west entrance. The outline is OpenStreetMap's; the heights, the towers' size and shape
+// (octagonal, with crenellated tops) and the colours are judged from a photograph.
+function holyTrinity({ axis, outline }) {
+  const { at, rect } = framed(axis);
+  const m = new Mesh().color("#bfb298").prism(outline, 0, 10);
+  osmPart(m, roofOver(rect(-0.4, 23.9, -10.2, 5.9), 10, 17), "#bfb298", "#6b6e70");
+  osmPart(m, roofOver(rect(-18, -0.4, -16.3, 17.5), 10, 17), "#bfb298", "#6b6e70");
+  for (const v of [-6.6, 2.2]) {
+    const [x, y] = at(25.1, v);
+    const t = new Mesh().color("#bfb298").lathe([[2.1, 0], [2.1, 18], [1.8, 18.6], [1.8, 23], [2.2, 23], [2.2, 24.5]], 8, Math.PI / 8);
+    m.positions.push(...t.positions.map((c, i) => c + (i % 3 === 0 ? x : i % 3 === 1 ? y : 0)));
+    m.normals.push(...t.normals);
+    m.colors.push(...t.colors);
+  }
+  return m.build();
+}
+
 // One entry per piece that has its own dates: built from `from` (work starts) to `to` (finished).
 export function landmarkParts(data) {
   const bmo = bmoField(data.bmoField);
@@ -379,6 +479,22 @@ export function landmarkParts(data) {
     { id: "ago-1977", key: "ago", mesh: ago(data.ago, "1977"), from: 1975.5, to: 1977.5 },
     { id: "ago-1993", key: "ago", mesh: ago(data.ago, "1993"), from: 1990.5, to: 1993 },
     { id: "ago-2008", key: "ago", mesh: ago(data.ago, "2008"), from: 2004.5, to: 2008.87 },
+    { id: "old-city-hall", key: "oldCityHall", mesh: osmBuilding(data.oldCityHall, undefined, "#a8724f", "#5e4a3c"), from: 1889.3, to: 1899.71 },
+    { id: "legislature", key: "legislature", mesh: osmBuilding(data.legislature, "1893", "#b8735f", "#6d6662", "#6e9c86"), from: 1886.3, to: 1893.26 },
+    { id: "legislature-1909", key: "legislature", mesh: osmBuilding(data.legislature, "1909", "#b8735f", "#6d6662"), from: 1908.3, to: 1909.9 },
+    { id: "university-college", key: "universityCollege", mesh: osmBuilding(data.universityCollege, "1859", "#b5ab97", "#5f6468"), from: 1856.4, to: 1859.75 },
+    { id: "university-college-1964", key: "universityCollege", mesh: osmBuilding(data.universityCollege, "1964", "#c3bba9", "#8d8f90"), from: 1962.5, to: 1964.7 },
+    { id: "union-station", key: "unionStation", mesh: osmBuilding(data.unionStation, "1920", "#d8d0bf", "#7d6656"), from: 1914.5, to: 1920.5 },
+    { id: "union-shed", key: "unionStation", mesh: osmBuilding(data.unionStation, "shed", "#8e8f90", "#8e8f90"), from: 1929, to: 1930.9 },
+    { id: "union-old-shed", key: "unionStation", mesh: osmBuilding(data.unionStation, "old-shed", "#8e8f90", "#8e8f90"), from: 1929, to: 1930.9, until: 2010 },
+    { id: "union-atrium", key: "unionStation", mesh: osmBuilding(data.unionStation, "atrium", "#bcd4de", "#bcd4de"), from: 2010.1, to: 2015 },
+    { id: "st-michaels", key: "stMichaels", mesh: stMichaels(data.stMichaels, "church"), from: 1845.27, to: 1848.66 },
+    { id: "st-michaels-spire", key: "stMichaels", mesh: stMichaels(data.stMichaels, "spire"), from: 1865, to: 1867 },
+    { id: "st-michaels-dormers", key: "stMichaels", mesh: stMichaels(data.stMichaels, "dormers"), from: 1889.6, to: 1890.5 },
+    { id: "metropolitan-tower", key: "metropolitan", mesh: metropolitan(data.metropolitan, "tower"), from: 1870.65, to: 1872.5 },
+    { id: "metropolitan-1872", key: "metropolitan", mesh: metropolitan(data.metropolitan, "body"), from: 1870.65, to: 1872.5, until: 1928.1 },
+    { id: "metropolitan-1929", key: "metropolitan", mesh: metropolitan(data.metropolitan, "body"), from: 1928.4, to: 1929.95 },
+    { id: "holy-trinity", key: "holyTrinity", mesh: holyTrinity(data.holyTrinity), from: 1846.6, to: 1847.82 },
     { id: "st-james", key: "stJames", mesh: stJames(data.stJames, false), from: 1850.5, to: 1853.46 },
     { id: "st-james-tower", key: "stJames", mesh: stJames(data.stJames, true), from: 1873.2, to: 1874.9 },
     { id: "ocad-reid", key: "ocad", mesh: sharp.reid, from: 1920.2, to: 1921.6 },
@@ -434,6 +550,37 @@ export const FACTS = {
   ago: { name: "Art Gallery of Ontario", url: "https://en.wikipedia.org/wiki/Art_Gallery_of_Ontario", replaces: [], rows: [
     ["Built", "First galleries 1918; Walker Court 1924 to 1926; Henry Moore Sculpture Centre 1974; Beverley Street 1977; expansion 1993; Frank Gehry's Transformation AGO 2008"],
     ["Model", "Shapes and heights from OpenStreetMap; the eras of each part read off the city's air photos, so 1935 is shown with 1926; The Grange (1817) is the city's own"],
+  ] },
+  oldCityHall: { name: "Old City Hall", url: "https://en.wikipedia.org/wiki/Old_City_Hall_(Toronto)", replaces: [], rows: [
+    ["Built", "1889 to 1899 to E. J. Lennox's design; opened 18 September 1899"],
+    ["Height", "103.6 m to the top of the clock tower"],
+    ["Model", "Shapes and heights from OpenStreetMap; colours judged from a photograph"],
+  ] },
+  legislature: { name: "Ontario Legislative Building", url: "https://en.wikipedia.org/wiki/Ontario_Legislative_Building", replaces: [], rows: [
+    ["Built", "1886 to 1893 to Richard Waite's design; north wing 1909; west wing rebuilt after the 1909 fire"],
+    ["Model", "Shapes and heights from OpenStreetMap; the north wing read off the city's air photo; the rebuilt west wing shown as it is now"],
+  ] },
+  universityCollege: { name: "University College", url: "https://en.wikipedia.org/wiki/University_College,_Toronto", replaces: [], rows: [
+    ["Built", "1856 to 1859 to Cumberland and Storm's design; Laidlaw wing in the 1960s"],
+    ["Model", "Shapes and heights from OpenStreetMap; the Laidlaw wing read off the city's air photo and shown from 1964"],
+  ] },
+  unionStation: { name: "Union Station", url: "https://en.wikipedia.org/wiki/Union_Station_(Toronto)", replaces: [], rows: [
+    ["Built", "1914 to 1920; opened 6 August 1927; train shed 1929 to 1930; glass atrium in the 2010s"],
+    ["Size", "229 m long; Great Hall 76 m long and 27 m high"],
+    ["Model", "Great Hall, colonnade, sheds and atrium from OpenStreetMap; the office wings' height judged"],
+  ] },
+  stMichaels: { name: "St. Michael's Cathedral Basilica", url: "https://en.wikipedia.org/wiki/St._Michael%27s_Cathedral_Basilica", replaces: [], rows: [
+    ["Built", "1845 to 1848 to William Thomas's design; tower and spire 1865 to 1867; dormers 1890"],
+    ["Height", "79 m to the top of the spire"],
+    ["Model", "Drawn by hand on OpenStreetMap's outline, tower and spire; eaves and dormers judged from a photograph"],
+  ] },
+  metropolitan: { name: "Metropolitan United Church", url: "https://en.wikipedia.org/wiki/Metropolitan_United_Church", replaces: [], rows: [
+    ["Built", "1870 to 1872 to Henry Langley's design; burned in 1928 but for the tower; rebuilt by December 1929"],
+    ["Model", "Drawn by hand on OpenStreetMap's outline; heights and pinnacles judged from a photograph"],
+  ] },
+  holyTrinity: { name: "Church of the Holy Trinity", url: "https://en.wikipedia.org/wiki/Church_of_the_Holy_Trinity_(Toronto)", replaces: [], rows: [
+    ["Built", "1847 to Henry Bowyer Lane's design; dedicated 27 October 1847"],
+    ["Model", "Drawn by hand on OpenStreetMap's outline; heights and the two towers judged from a photograph"],
   ] },
   bmoField: { name: "BMO Field", url: "https://en.wikipedia.org/wiki/BMO_Field", replaces: [], rows: [
     ["Built", "Opened 2007; east upper deck 2015; roof 2016"],

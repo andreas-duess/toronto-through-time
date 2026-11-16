@@ -684,6 +684,7 @@ let meta, buildings, years, heights, tiers, names, water, population, stops, str
 let centres, searchEntries = [];
 // buildings of the city's model that a hand-built landmark stands in for
 const replaced = new Set();
+const lostReplaced = new Set();
 
 // Buildings are drawn in batches: those that stand at about the same time in the same part of the
 // city. A year and a view then only cost the batches standing in that year and lying in that view,
@@ -780,18 +781,43 @@ async function load() {
     const k = starts[i], n = starts[i + 1] - k;
     for (let j = k; j < k + n; j++) { centres[i * 2] += positions[j * 3] / n; centres[i * 2 + 1] += positions[j * 3 + 1] / n; }
   }
-  // and every building whose middle is inside the outline of a model that takes its place
-  for (const outline of Object.values(models).flatMap((m) => m.hide ?? [])) {
-    const xs = outline.map((p) => p[0] - meta.origin[0]), ys = outline.map((p) => p[1] - meta.origin[1]);
-    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-    for (let i = 0; i < meta.count; i++) {
-      const x = centres[i * 2], y = centres[i * 2 + 1];
-      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
-      let inside = false;
-      for (let a = 0, b = xs.length - 1; a < xs.length; b = a++) {
-        if ((ys[a] > y) !== (ys[b] > y) && x < ((xs[b] - xs[a]) * (y - ys[a])) / (ys[b] - ys[a]) + xs[a]) inside = !inside;
+  // and every building whose middle is inside the outline of a model that takes its place; of the
+  // lost buildings, those still standing when the model's first part is finished (the plans drew
+  // the landmark itself), not those that stood there before it
+  const lostCentres = new Float32Array((lost?.count ?? 0) * 2);
+  for (let i = 0; lost && i < lost.count; i++) {
+    const k = lost.starts[i], n = lost.starts[i + 1] - k;
+    for (let j = k; j < k + n; j++) { lostCentres[i * 2] += lost.positions[j * 2] / n; lostCentres[i * 2 + 1] += lost.positions[j * 2 + 1] / n; }
+  }
+  for (const [key, model] of Object.entries(models)) {
+    const done = Math.min(...landmarks.filter((p) => p.key === key).map((p) => p.to));
+    for (const outline of model.hide ?? []) {
+      const xs = outline.map((p) => p[0] - meta.origin[0]), ys = outline.map((p) => p[1] - meta.origin[1]);
+      const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+      const inside = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1 && pointInRing(xs, ys, x, y);
+      const near = (x, y) => x > x0 - 0.002 && x < x1 + 0.002 && y > y0 - 0.002 && y < y1 + 0.002;
+      for (let i = 0; i < meta.count; i++) {
+        if (!near(centres[i * 2], centres[i * 2 + 1])) continue;
+        if (inside(centres[i * 2], centres[i * 2 + 1])) { replaced.add(i); continue; }
+        // a building round a courtyard has its middle outside it: then most of a grid of points on
+        // the building must be inside the outline
+        const bx = [], by = [];
+        for (let j = starts[i]; j < starts[i + 1]; j++) { bx.push(positions[j * 3]); by.push(positions[j * 3 + 1]); }
+        const [l, r, d, u] = [Math.min(...bx), Math.max(...bx), Math.min(...by), Math.max(...by)];
+        let on = 0, inOutline = 0;
+        for (let a = 0.5; a < 12; a++) {
+          for (let c = 0.5; c < 12; c++) {
+            const x = l + ((r - l) * a) / 12, y = d + ((u - d) * c) / 12;
+            if (!pointInRing(bx, by, x, y)) continue;
+            on++;
+            inOutline += inside(x, y);
+          }
+        }
+        if (on && inOutline * 2 > on) replaced.add(i);
       }
-      if (inside) replaced.add(i);
+      for (let i = 0; lost && i < lost.count; i++) {
+        if (lost.span[i * 4 + 1] > done && inside(lostCentres[i * 2], lostCentres[i * 2 + 1])) lostReplaced.add(i);
+      }
     }
   }
   addresses = (await fetch(DATA + "addresses.txt").then((r) => r.text())).split("\n");
@@ -821,6 +847,14 @@ async function load() {
   loadTrees(DATA).then((t) => { trees = t; render(); }).catch(() => {});
 }
 
+function pointInRing(xs, ys, x, y) {
+  let odd = false;
+  for (let a = 0, b = xs.length - 1; a < xs.length; b = a++) {
+    if ((ys[a] > y) !== (ys[b] > y) && x < ((xs[b] - xs[a]) * (y - ys[a])) / (ys[b] - ys[a]) + xs[a]) odd = !odd;
+  }
+  return odd;
+}
+
 // Buildings that are gone, read off the fire insurance plans. Absent if lost.json is.
 async function loadLost() {
   const info = await fetch(DATA + "lost.json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
@@ -847,7 +881,7 @@ async function loadLost() {
       groups.push({ ids, since: span[ids[0] * 4], until });
     }
   }
-  return { ...info, span, tall, about, batches: batches(groups, starts, positions, 2) };
+  return { ...info, span, tall, about, starts, positions, batches: batches(groups, starts, positions, 2) };
 }
 
 function lostLayers() {
@@ -868,7 +902,12 @@ function lostLayers() {
     pickable: true,
     autoHighlight: true,
     highlightColor: [255, 255, 255, 90],
-    getYears: (_, { index, target }) => { for (let k = 0; k < 4; k++) target[k] = lost.span[b.ids[index] * 4 + k]; return target; },
+    getYears: (_, { index, target }) => {
+      const id = b.ids[index];
+      for (let k = 0; k < 4; k++) target[k] = lost.span[id * 4 + k];
+      if (lostReplaced.has(id)) target[0] = target[1] = 9999;   // a landmark model stands in for it
+      return target;
+    },
     currentYear: state.year,
     growYears: RISE_YEARS,
     tint: state.quality ? [1, 1, 1] : NEW_TINT,

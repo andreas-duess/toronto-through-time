@@ -136,9 +136,10 @@ def frame(ways, host):
     return origin, (x1 - x0) / d, (y1 - y0) / d
 
 
-def by_era(parts, axis, era):
+def by_era(parts, axis, era, whole=False):
     """Each part cut by the masks of a building's eras. `era(u, v, part)` names the era of a point
-    along and across the building; a part is cut where it crosses from one era into another."""
+    along and across the building; a part is cut where it crosses from one era into another, or,
+    `whole`, goes entirely to the era of its middle."""
     import shapely
     ax, ay = axis
     to_uv = lambda x, y: (x * ax + y * ay, -x * ay + y * ax)
@@ -148,6 +149,10 @@ def by_era(parts, axis, era):
         if not p["top"] > p["foot"]:
             continue
         shape = shapely.Polygon([to_uv(*xy) for xy in p["ring"]]).buffer(0)
+        if whole:
+            c = shape.representative_point()
+            out.append({**p, "era": era(c.x, c.y, p)})
+            continue
         u0, v0, u1, v1 = shape.bounds
         cells = {}
         # the masks are rectangles, so a fine grid of cells finds each era's piece of the part
@@ -217,8 +222,110 @@ def ago(ways):
     return {"origin": origin, "parts": parts, "hide": [ring(ways[AGO])]}
 
 
+def uv_frame(ways, host):
+    """For the models drawn by hand in the web map: the origin, the direction of the longest side
+    and the outline, in metres; the web map places its pieces along (u) and across (v) that side."""
+    origin, ax, ay = frame(ways, host)
+    return {"origin": origin, "axis": [round(ax, 5), round(ay, 5)], "outline": local(ring(ways[host]), origin),
+            "hide": [ring(ways[host])]}
+
+
+def cut(points, axis, keep):
+    """The part of an outline (metres) where `keep(u, v)`, as the outline of its largest piece."""
+    import shapely
+    ax, ay = axis
+    shape = shapely.Polygon([(x * ax + y * ay, -x * ay + y * ax) for x, y in points]).buffer(0)
+    u0, v0, u1, v1 = shape.bounds
+    cells = [shapely.box(u, v, u + 1, v + 1) for u in range(int(u0) - 1, int(u1) + 2)
+             for v in range(int(v0) - 1, int(v1) + 2) if keep(u + 0.5, v + 0.5)]
+    piece = shape.intersection(shapely.unary_union(cells)).simplify(0.3)
+    piece = max(getattr(piece, "geoms", [piece]), key=lambda g: g.area)
+    return [[round(ax * u - ay * v, 2), round(ay * u + ax * v, 2)] for u, v in piece.exterior.coords[:-1]]
+
+
+OLD_CITY_HALL, LEGISLATURE, UNIVERSITY_COLLEGE, UNION = 3116, 15089986, 8032167, 14744491
+ST_MICHAELS, METROPOLITAN, HOLY_TRINITY = 43808581, 34007361, 34545830
+ST_MICHAELS_SPIRE = 289215698
+
+
+def old_city_hall(ways):
+    """Its parts as mapped in OpenStreetMap, the clock tower to 103.6 m; one era."""
+    origin = centre(ring(ways[OLD_CITY_HALL]))
+    return {"origin": origin, "parts": [part(w, origin) for w in parts_inside(ways, OLD_CITY_HALL)],
+            "hide": [ring(ways[OLD_CITY_HALL])]}
+
+
+def legislature(ways):
+    """The Legislative Building's parts; the north wing of 1909 is the block north of the courtyard
+    (v above 15, within 25 m of the middle) and the link to it, read off the city's air photo."""
+    origin, ax, ay = frame(ways, LEGISLATURE)
+    parts = [part(w, origin) for w in parts_inside(ways, LEGISLATURE)]
+    era = lambda u, v, p: "1909" if (v > 15 and abs(u) < 25) or (abs(u) < 5 and v > -9) else "1893"
+    return {"origin": origin, "parts": by_era(parts, (ax, ay), era, whole=True), "hide": [ring(ways[LEGISLATURE])]}
+
+
+def university_college(ways):
+    """University College's parts; the Laidlaw wing of the 1960s is the flat-roofed range that
+    closes the quadrangle on the north (u -42 to 18, v below -32), read off the city's air photo."""
+    origin, ax, ay = frame(ways, UNIVERSITY_COLLEGE)
+    parts = [part(w, origin) for w in parts_inside(ways, UNIVERSITY_COLLEGE)]
+    era = lambda u, v, p: "1964" if -42 <= u <= 18 and v < -32 else "1859"
+    return {"origin": origin, "parts": by_era(parts, (ax, ay), era, whole=True),
+            "hide": [ring(ways[UNIVERSITY_COLLEGE])]}
+
+
+def union_station(ways):
+    """Union Station: OpenStreetMap maps the Great Hall, the colonnade, the train sheds and the glass
+    atrium in 3D but not the office wings either side of the hall; those are the outline along Front
+    Street (v above -8) outside the hall, drawn 17 m high, where the pavilion roofs on the wings
+    start. The atrium's outline is also the middle of the old shed, which it replaced."""
+    origin, ax, ay = frame(ways, UNION)
+    raw = [(part(w, origin), w) for w in parts_inside(ways, UNION)]
+
+    def era(p, w):
+        if w["tags"].get("building:material") == "glass":
+            return "atrium"
+        return "shed" if w["tags"].get("building:levels") == "1" and not w["tags"].get("height") else "1920"
+    parts = [{**p, "era": era(p, w)} for p, w in raw]
+    atrium = next(p for p in parts if p["era"] == "atrium")
+    wings = [cut(local(ring(ways[UNION]), origin), (ax, ay), lambda u, v, s=s: v > -8 and s * (u - (11 if s > 0 else -69)) > 0)
+             for s in (-1, 1)]
+    parts += [{"ring": r, "foot": 0, "top": 17, "roof": 0, "shape": "flat", "era": "1920"} for r in wings]
+    parts.append({**atrium, "top": 3.3, "era": "old-shed"})
+    return {"origin": origin, "parts": parts, "hide": [ring(ways[UNION])]}
+
+
+def st_michaels(ways):
+    """St. Michael's Cathedral: the outline and frame for the hand-drawn model, and the tower and
+    spire as OpenStreetMap maps them (79.25 m, the spire from 40 m)."""
+    out = uv_frame(ways, ST_MICHAELS)
+    out["spire"] = part(ways[ST_MICHAELS_SPIRE], out["origin"])
+    return out
+
+
+def metropolitan(ways):
+    """Metropolitan United: the outline cut into the tower at the south end (u from 17.3, where
+    the outline narrows to the tower's 9 m) and the church, which burned in 1928."""
+    out = uv_frame(ways, METROPOLITAN)
+    out["tower"] = cut(out["outline"], out["axis"], lambda u, v: u >= 17.3)
+    out["body"] = cut(out["outline"], out["axis"], lambda u, v: u < 17.3)
+    return out
+
+
 if __name__ == "__main__":
-    ways = {e["id"]: e for e in json.loads(OSM.read_text())["elements"] if e["type"] == "way"}
+    elements = json.loads(OSM.read_text())["elements"]
+    ways = {e["id"]: e for e in elements if e["type"] == "way"}
+    # a building mapped as a multipolygon relation, as a way along its largest outer ring
+    import shapely
+    from shapely.ops import polygonize, unary_union
+    for e in elements:
+        if e["type"] == "relation" and e.get("tags", {}).get("building") and e.get("members"):
+            lines = [shapely.LineString([(p["lon"], p["lat"]) for p in m["geometry"]])
+                     for m in e["members"] if m["role"] == "outer" and m.get("geometry")]
+            polys = list(polygonize(unary_union(lines)))
+            if polys:
+                outer = max(polys, key=lambda p: p.area)
+                ways[e["id"]] = {**e, "type": "way", "geometry": [{"lon": x, "lat": y} for x, y in outer.exterior.coords]}
     cn = centre(ring(ways[CN_TOWER]))
     rogers = centre(ring(ways[ROGERS_CENTRE]))
     bmo = centre(ring(ways[BMO_PITCH]))
@@ -232,6 +339,13 @@ if __name__ == "__main__":
         "ocad": ocad(ways),
         "rom": rom(ways),
         "ago": ago(ways),
+        "oldCityHall": old_city_hall(ways),
+        "legislature": legislature(ways),
+        "universityCollege": university_college(ways),
+        "unionStation": union_station(ways),
+        "stMichaels": st_michaels(ways),
+        "metropolitan": metropolitan(ways),
+        "holyTrinity": uv_frame(ways, HOLY_TRINITY),
     }
     # without the 1913 plan here, keep the Trinity College already written
     trinity = trinity_college() or (json.loads(OUT.read_text()).get("trinityCollege") if OUT.exists() else None)
