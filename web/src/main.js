@@ -768,9 +768,27 @@ async function load() {
   }
   buildings = batches(groups, starts, positions, 3);
   lost = await loadLost();
-  landmarks = landmarkParts(await fetchJson("landmarks.json"));
+  const models = await fetchJson("landmarks.json");
+  landmarks = landmarkParts(models);
   const standIns = new Set(Object.values(FACTS).flatMap((f) => f.replaces));
   for (const [i, n] of Object.entries(names)) if (standIns.has(n.name)) replaced.add(Number(i));
+  // and every building whose middle is inside the outline of a model that takes its place
+  for (const outline of Object.values(models).flatMap((m) => m.hide ?? [])) {
+    const xs = outline.map((p) => p[0] - meta.origin[0]), ys = outline.map((p) => p[1] - meta.origin[1]);
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    for (let i = 0; i < meta.count; i++) {
+      const k = starts[i], n = starts[i + 1] - k;
+      if (positions[k * 3] < x0 - 0.002 || positions[k * 3] > x1 + 0.002 || positions[k * 3 + 1] < y0 - 0.002 || positions[k * 3 + 1] > y1 + 0.002) continue;
+      let x = 0, y = 0;
+      for (let j = k; j < k + n; j++) { x += positions[j * 3]; y += positions[j * 3 + 1]; }
+      x /= n; y /= n;
+      let inside = false;
+      for (let a = 0, b = xs.length - 1; a < xs.length; b = a++) {
+        if ((ys[a] > y) !== (ys[b] > y) && x < ((xs[b] - xs[a]) * (y - ys[a])) / (ys[b] - ys[a]) + xs[a]) inside = !inside;
+      }
+      if (inside) replaced.add(i);
+    }
+  }
   addresses = (await fetch(DATA + "addresses.txt").then((r) => r.text())).split("\n");
   for (const s of stops) {
     for (const k of ["year", "lon", "lat", "zoom", "bearing", "pitch", "orbit"]) s[k] = Number(s[k]);
@@ -906,6 +924,7 @@ function roofLayer(id, from, to, settled) {
       return target;
     },
     getScale: (_, { index }) => {
+      if (replaced.has(roofs.ids[from + index])) return [0, 0, 0];   // a hand-built landmark has its own roof
       const k = (from + index) * 5;
       return [roofs.size[k], roofs.size[k + 1], roofs.size[k + 3] * (settled ? 1 : grown(index))];
     },

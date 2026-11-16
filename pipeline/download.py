@@ -56,7 +56,12 @@ OVERPASS = {
     # outlines for the hand-built landmark models (pipeline/models.py)
     "osm/landmarks.json": '[out:json][timeout:60];(nwr(43.6318,-79.4205,43.6346,-79.4165)'
                           '[~"^(leisure|building|man_made|sport)$"~"."];nwr(43.6405,-79.3915,43.6435,-79.3860)'
-                          '[name~"CN Tower|Rogers Centre"];);out tags geom;',
+                          '[name~"CN Tower|Rogers Centre"];'
+                          # Casa Loma, OCAD's Sharp Centre, St. James' Cathedral: the buildings and their 3D parts
+                          + "".join(f'nwr{box}[~"^(building|building:part)$"~"."];' for box in (
+                              "(43.6772,-79.4105,43.6790,-79.4080)", "(43.6520,-79.3925,43.6540,-79.3905)",
+                              "(43.6498,-79.3748,43.6512,-79.3732)"))
+                          + ');out tags geom;',
     # places of worship, and the parts of buildings mapped in 3D (towers, spires), for the churches
     "osm/worship.json": f'[out:json][timeout:150];(way[amenity=place_of_worship]{BOX};relation[amenity=place_of_worship]{BOX};'
                         f'way[building~"^(church|cathedral|chapel|synagogue|mosque|temple)$"]{BOX};);out tags geom;',

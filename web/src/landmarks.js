@@ -211,10 +211,134 @@ function trinityCollege({ outline, roof, front }) {
   return m.build();
 }
 
+// A building:part as OpenStreetMap maps it (pipeline/models.py): walls from its foot up to the
+// eaves, and a roof of its tagged shape and height over them. Each roof is the outline at the eaves
+// drawn in to a ridge, a point or a smaller ring: a gabled roof's corners go to the ridge line along
+// the longest side (across it if tagged so), a hipped roof's to a ridge shortened by the width, a
+// pyramid's to the middle. Skillion roofs slope down towards their tagged direction.
+const middle = (ring) => [0, 1].map((k) => ring.reduce((s, p) => s + p[k], 0) / ring.length);
+
+function longestSide(ring) {
+  let [ax, ay] = [1, 0], longest = 0;
+  ring.forEach(([x, y], i) => {
+    const [u, v] = ring[(i + 1) % ring.length], len = Math.hypot(u - x, v - y);
+    if (len > longest) [longest, ax, ay] = [len, (u - x) / len, (v - y) / len];
+  });
+  return [ax, ay];
+}
+
+function osmPart(m, p, wall, roof) {
+  const ring = ccw(p.ring);
+  const at = (z) => ring.map(([x, y]) => [x, y, z]);
+  const eaves = p.top - p.roof;
+  m.color(wall);
+  if (p.foot > 0) m.cap(at(p.foot), false);
+  if (p.shape === "skillion" && p.direction != null && p.roof > 0) {
+    const d = (p.direction * Math.PI) / 180, s = ring.map(([x, y]) => x * Math.sin(d) + y * Math.cos(d));
+    const lo = Math.min(...s), hi = Math.max(...s);
+    const top = ring.map(([x, y], i) => [x, y, p.top - (p.roof * (s[i] - lo)) / (hi - lo || 1)]);
+    m.loft([at(p.foot), top]).color(roof).cap(top);
+    return;
+  }
+  if (!(p.roof > 0) || !["gabled", "hipped", "pyramidal", "cone", "dome", "round", "onion"].includes(p.shape)) {
+    const z = p.roof > 0 ? p.top - p.roof / 2 : p.top;     // other shapes: flat at half the roof
+    m.loft([at(p.foot), at(z)]).cap(at(z));
+    return;
+  }
+  m.loft([at(p.foot), at(eaves)]).color(roof);
+  const [cx, cy] = middle(ring);
+  let rings;
+  if (p.shape === "gabled" || p.shape === "hipped") {
+    let [ax, ay] = longestSide(ring);
+    if (p.across) [ax, ay] = [-ay, ax];
+    const along = ring.map(([x, y]) => (x - cx) * ax + (y - cy) * ay);
+    const wide = ring.map(([x, y]) => Math.abs((x - cx) * -ay + (y - cy) * ax));
+    const reach = p.shape === "hipped" ? Math.max(0, Math.max(...along.map(Math.abs)) - Math.max(...wide)) : Infinity;
+    rings = [ring.map((_, i) => {
+      const t = Math.max(-reach, Math.min(reach, along[i]));
+      return [cx + ax * t, cy + ay * t, p.top];
+    })];
+  } else {
+    const steps = p.shape === "onion" ? [[1.2, 0.25], [1.05, 0.5], [0.55, 0.75], [0.2, 0.9], [0, 1]]
+      : p.shape === "dome" || p.shape === "round" ? [1, 2, 3, 4, 5, 6].map((k) => [Math.cos((k * Math.PI) / 12), Math.sin((k * Math.PI) / 12)])
+      : [[0, 1]];
+    rings = steps.map(([r, h]) => ring.map(([x, y]) => [cx + (x - cx) * r, cy + (y - cy) * r, eaves + p.roof * h]));
+  }
+  m.loft([at(eaves), ...rings]);
+}
+
+// Casa Loma. Source: built 1911 to 1914 to E. J. Lennox's design; work stopped with the war in
+// 1914 and parts of the inside were never finished. Shapes and heights are OpenStreetMap's, whose
+// mappers estimated the heights; colours (grey-buff stone, red-brown tile roofs) are judged from a
+// photograph.
+function casaLoma({ parts }) {
+  const m = new Mesh();
+  for (const p of parts) osmPart(m, p, "#c2b8a5", "#8f5244");
+  return m.build();
+}
+
+// St. James' Cathedral. Source: built from 1850 and opened 19 June 1853; Henry Langley's tower and
+// spire, 92.9 m, were finished 1873 to 1874; white (buff) brick and Ohio sandstone. Shapes and
+// heights are OpenStreetMap's; the copper green of the roofs and spire is judged from a photograph.
+function stJames({ parts }, tower) {
+  const m = new Mesh();
+  for (const p of parts.filter((q) => q.tower === tower)) {
+    const stone = p.shape === "pyramidal" && p.roof < 5;      // the pinnacles
+    osmPart(m, p, "#cfbb91", stone ? "#cfbb91" : "#6e9c86");
+  }
+  return m.build();
+}
+
+// OCAD's main building and the Sharp Centre for Design, 100 McCaul Street. Source: George Reid's
+// wing opened 1921 and the A. J. Casson wing 17 January 1957 (floors and an atrium added in 1963,
+// 1967 and 1981 are not shown apart); Will Alsop's tabletop, chosen in 2002 and finished in 2004,
+// is 84 by 31 m and 9 m deep, 26 m above the ground, on multi-coloured pillars at different angles.
+// Outlines are OpenStreetMap's, and so are the two cores that carry the box; the Casson wing's
+// 13 m is the city's measured height. The colours of the pillars (mostly black, with blue, yellow,
+// purple and white ones and a red brace), their steep angles and the red-brown brick below are
+// from photographs; the number and places of the pillars are judged from them.
+const PILLARS = ["#262626", "#3a6db5", "#d9b324", "#d9b324", "#262626", "#7b4f9d", "#e4e1d9", "#262626",
+  "#3a6db5", "#262626", "#d9b324", "#7b4f9d"];
+
+function ocad({ table, reid, main, cores }) {
+  const old = new Mesh();
+  osmPart(old, reid, "#9c5e47", "#3f4044");
+  const casson = new Mesh().color("#a2654f").prism(main, 0, 13.1);
+  const legs = new Mesh().color("#b7b2a8");
+  for (const c of cores) legs.prism(c, 0, 26);
+  // pillars in pairs along the box, leaning steeply and crossing; the red brace rises from the
+  // ground by the old building
+  const ring = ccw(table), [cx, cy] = middle(ring), [ax, ay] = longestSide(ring), [nx, ny] = [-ay, ax];
+  const pt = (s, w, z) => [cx + ax * s + nx * w, cy + ay * s + ny * w, z];
+  const strut = (foot, head, r) => {
+    const square = ([x, y, z]) => [[x - r, y - r, z], [x + r, y - r, z], [x + r, y + r, z], [x - r, y + r, z]];
+    legs.loft([square(foot), square(head)]);
+  };
+  [[-34, 4, 9], [-21, -5, -8], [-8, 6, 7], [7, -4, -9], [20, 5, 8], [34, -6, -7]].forEach(([s, lean, shift], k) => {
+    for (const side of [-1, 1]) {
+      legs.color(PILLARS[k * 2 + (side > 0)]);
+      strut(pt(s + side * shift, side * (12 + lean), 0), pt(s - side * shift * 0.3, side * 11, 26), 0.6);
+    }
+  });
+  legs.color("#c23b2e");
+  strut(pt(-16, 4, 0), pt(2, 1, 26), 1.5);
+  const box = new Mesh().color("#ecebe6").prism(table, 26, 35).cap(ring.map(([x, y]) => [x, y, 26]), false);
+  return { reid: old.build(), casson: casson.build(), legs: legs.build(), box: box.build() };
+}
+
 // One entry per piece that has its own dates: built from `from` (work starts) to `to` (finished).
 export function landmarkParts(data) {
   const bmo = bmoField(data.bmoField);
+  const sharp = ocad(data.ocad);
   return [
+    { id: "casa-loma", key: "casaLoma", mesh: casaLoma(data.casaLoma), from: 1911.4, to: 1914.6 },
+    { id: "st-james", key: "stJames", mesh: stJames(data.stJames, false), from: 1850.5, to: 1853.46 },
+    { id: "st-james-tower", key: "stJames", mesh: stJames(data.stJames, true), from: 1873.2, to: 1874.9 },
+    { id: "ocad-reid", key: "ocad", mesh: sharp.reid, from: 1920.2, to: 1921.6 },
+    { id: "ocad-casson", key: "ocad", mesh: sharp.casson, from: 1955.8, to: 1957.05 },
+    { id: "ocad-legs", key: "ocad", mesh: sharp.legs, from: 2003, to: 2004.3 },
+    // the box is lifted on at once, so that it does not grow from the street
+    { id: "ocad-table", key: "ocad", mesh: sharp.box, from: 2004.3, to: 2004.32 },
     { id: "cn-tower", key: "cnTower", mesh: cnTower(), from: 1973.1, to: 1976.48 },
     { id: "rogers-centre", key: "rogersCentre", mesh: rogersCentre(data.rogersCentre), from: 1986.76, to: 1989.42 },
     { id: "bmo-field", key: "bmoField", mesh: bmo.base, from: 2006.73, to: 2007.33 },
@@ -241,6 +365,20 @@ export const FACTS = {
     ["Built", "1851; opened January 1852. The college moved to Hoskin Avenue in 1925"],
     ["Gone", "Demolished in the 1950s; shown until 1956"],
     ["Model", "Footprint from Goad's fire insurance plan of 1913; heights, tower and turrets judged from a postcard view"],
+  ] },
+  casaLoma: { name: "Casa Loma", url: "https://en.wikipedia.org/wiki/Casa_Loma", replaces: [], rows: [
+    ["Built", "1911 to 1914 for Sir Henry Pellatt, to E. J. Lennox's design; work stopped with the war"],
+    ["Model", "Shapes and roofs from OpenStreetMap, whose heights are estimates; colours judged from a photograph"],
+  ] },
+  stJames: { name: "Cathedral Church of St. James", url: "https://en.wikipedia.org/wiki/Cathedral_Church_of_St._James_(Toronto)", replaces: [], rows: [
+    ["Built", "1850 to 1853; tower and spire 1873 to 1874, by Henry Langley"],
+    ["Height", "92.9 m to the top of the spire"],
+    ["Model", "Shapes and heights from OpenStreetMap; colours judged from a photograph"],
+  ] },
+  ocad: { name: "OCAD University and the Sharp Centre for Design", url: "https://en.wikipedia.org/wiki/OCAD_University", replaces: [], rows: [
+    ["Built", "Reid wing 1921; Casson wing 1957; Sharp Centre 2004, by Will Alsop"],
+    ["Sharp Centre", "84 by 31 m and 9 m deep, 26 m above the ground"],
+    ["Model", "Outlines from OpenStreetMap; the later additions to the main building are not shown apart; pillars judged from photographs"],
   ] },
   bmoField: { name: "BMO Field", url: "https://en.wikipedia.org/wiki/BMO_Field", replaces: [], rows: [
     ["Built", "Opened 2007; east upper deck 2015; roof 2016"],

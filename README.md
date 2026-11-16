@@ -61,10 +61,16 @@ buildings. `web/public/sources.html` has the full list with licences.
 
 ## Hand-built landmarks
 
-`web/src/landmarks.js` builds the CN Tower, the Rogers Centre and BMO Field from simple shapes;
-`pipeline/models.py` supplies their outlines from OpenStreetMap. The comment above each model says
-which numbers are sourced and which are judged from photographs. To add one: a function that
-returns a mesh, an entry in `landmarkParts` with its construction years, and an entry in `FACTS`.
+`web/src/landmarks.js` builds the CN Tower, the Rogers Centre, BMO Field, the old Trinity College,
+Casa Loma, St. James' Cathedral and OCAD with the Sharp Centre from simple shapes;
+`pipeline/models.py` supplies their outlines from OpenStreetMap. Where OpenStreetMap maps a building
+in 3D (heights and roof shapes of each part, as for Casa Loma and St. James'), `osmPart` builds it
+from those parts. The comment above each model says which numbers are sourced and which are judged
+from photographs. To add one: a function that returns a mesh, an entry in `landmarkParts` with its
+construction years, and an entry in `FACTS`. The buildings a model stands in for are hidden by name
+(`replaces` in `FACTS`) or by outline (`hide` in `landmarks.json`: every building whose middle is
+inside). Names can be wrong (four of the Art Gallery's blocks carry the Sharp Centre's name), so
+new models use outlines.
 
 ## Known limits
 
