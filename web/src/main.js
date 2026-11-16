@@ -5,6 +5,7 @@ import { SolidPolygonLayer, IconLayer } from "@deck.gl/layers";
 import { SimpleMeshLayer } from "@deck.gl/mesh-layers";
 import { TimeExtension } from "./time.js";
 import { landmarkParts, FACTS } from "./landmarks.js";
+import { searchIndex, search } from "./search.js";
 import { fetchPacked, fetchMetres, fetchStarts, fetchPositions } from "./pack.js";
 import { loadTrees, treeMesh, TREE_COLORS } from "./trees.js";
 import { SunEffect, today, sunAt, clock } from "./sun.js";
@@ -680,6 +681,7 @@ let roofs = null;
 const roofRise = new Map();
 let events = null;
 let meta, buildings, years, heights, tiers, names, water, population, stops, streets, streetLabels, places, area, rail, sites, forest, parks, lost, addresses, landmarks;
+let centres, searchEntries = [];
 // buildings of the city's model that a hand-built landmark stands in for
 const replaced = new Set();
 
@@ -772,16 +774,19 @@ async function load() {
   landmarks = landmarkParts(models);
   const standIns = new Set(Object.values(FACTS).flatMap((f) => f.replaces));
   for (const [i, n] of Object.entries(names)) if (standIns.has(n.name)) replaced.add(Number(i));
+  // the middle of each building, as lon/lat from meta.origin
+  centres = new Float32Array(meta.count * 2);
+  for (let i = 0; i < meta.count; i++) {
+    const k = starts[i], n = starts[i + 1] - k;
+    for (let j = k; j < k + n; j++) { centres[i * 2] += positions[j * 3] / n; centres[i * 2 + 1] += positions[j * 3 + 1] / n; }
+  }
   // and every building whose middle is inside the outline of a model that takes its place
   for (const outline of Object.values(models).flatMap((m) => m.hide ?? [])) {
     const xs = outline.map((p) => p[0] - meta.origin[0]), ys = outline.map((p) => p[1] - meta.origin[1]);
     const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
     for (let i = 0; i < meta.count; i++) {
-      const k = starts[i], n = starts[i + 1] - k;
-      if (positions[k * 3] < x0 - 0.002 || positions[k * 3] > x1 + 0.002 || positions[k * 3 + 1] < y0 - 0.002 || positions[k * 3 + 1] > y1 + 0.002) continue;
-      let x = 0, y = 0;
-      for (let j = k; j < k + n; j++) { x += positions[j * 3]; y += positions[j * 3 + 1]; }
-      x /= n; y /= n;
+      const x = centres[i * 2], y = centres[i * 2 + 1];
+      if (x < x0 || x > x1 || y < y0 || y > y1) continue;
       let inside = false;
       for (let a = 0, b = xs.length - 1; a < xs.length; b = a++) {
         if ((ys[a] > y) !== (ys[b] > y) && x < ((xs[b] - xs[a]) * (y - ys[a])) / (ys[b] - ys[a]) + xs[a]) inside = !inside;
@@ -790,6 +795,7 @@ async function load() {
     }
   }
   addresses = (await fetch(DATA + "addresses.txt").then((r) => r.text())).split("\n");
+  searchEntries = searchIndex({ facts: FACTS, models, names, addresses, centres, origin: meta.origin, replaced, places });
   for (const s of stops) {
     for (const k of ["year", "lon", "lat", "zoom", "bearing", "pitch", "orbit"]) s[k] = Number(s[k]);
     s.yearEnd = Number(s.year_end) > s.year ? Number(s.year_end) : s.year;
@@ -1395,6 +1401,7 @@ function setupControls() {
   $("story-sound").innerHTML = SPEAKER_ON;
   setupSun();
   setupPanel();
+  setupSearch();
   const slider = $("slider");
   slider.min = String(meta.firstYear);
   slider.max = String(meta.lastYear);
@@ -1464,7 +1471,7 @@ function setupControls() {
     if (!story.voice) hush(); else if (story.playing) openStop(story.index, true);
   });
   document.addEventListener("keydown", (e) => {
-    if (e.target.tagName === "SELECT") return;
+    if (["SELECT", "INPUT", "TEXTAREA"].includes(e.target.tagName)) return;
     if (e.code === "Space") {
       e.preventDefault();
       if (story.index >= 0) $("story-play").click(); else setPlaying(!state.playing);
@@ -1653,6 +1660,11 @@ function showBuilding(info) {
       ...(known?.url ? [["More", `<a href="${escapeHtml(known.url)}" target="_blank" rel="noopener">article</a>`]] : []),
     ]);
   }
+  buildingCard(i);
+}
+
+// The card of one of today's buildings in the old city.
+function buildingCard(i) {
   const tier = meta.tiers[tiers[i]];
   const named = names[i];
   const rows = [
@@ -1665,6 +1677,64 @@ function showBuilding(info) {
   const address = addresses[i];
   if (named?.name && address) rows.unshift(["Address", address]);
   showInfo(named?.name ?? (address || "Building"), rows);
+}
+
+// The search box at the top (search.js). A hit flies there and shows its card; if it is not
+// standing in the year on the slider, the year moves to when it was built.
+function setupSearch() {
+  const box = $("search-box"), list = $("search-results");
+  let hits = [], at = -1;
+  const show = () => {
+    list.innerHTML = hits.length
+      ? hits.map((e, k) => `<li role="option" id="search-${k}" aria-selected="${k === at}"><span>${escapeHtml(e.label)}</span><span class="sub">${escapeHtml(e.sub)}</span></li>`).join("")
+      : `<li class="none">${searchEntries.length ? "Nothing found in the old city" : "Still loading the addresses"}</li>`;
+    list.hidden = !box.value.trim();
+    box.setAttribute("aria-expanded", String(!list.hidden));
+    box.setAttribute("aria-activedescendant", at >= 0 ? `search-${at}` : "");
+  };
+  box.addEventListener("input", () => { hits = search(searchEntries, box.value); at = hits.length ? 0 : -1; show(); });
+  box.addEventListener("keydown", (ev) => {
+    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+      ev.preventDefault();
+      if (hits.length) at = (at + (ev.key === "ArrowDown" ? 1 : hits.length - 1)) % hits.length;
+      show();
+    } else if (ev.key === "Enter" && hits[at]) {
+      choose(hits[at]);
+    } else if (ev.key === "Escape") {
+      box.value = ""; hits = []; show(); box.blur();
+    }
+  });
+  list.addEventListener("mousedown", (ev) => {
+    const li = ev.target.closest("li[role=option]");
+    if (li) { ev.preventDefault(); choose(hits[Number(li.id.slice(7))]); }
+  });
+  box.addEventListener("blur", () => { list.hidden = true; box.setAttribute("aria-expanded", "false"); });
+  box.addEventListener("focus", () => { if (box.value.trim()) show(); });
+  const choose = (e) => {
+    box.value = e.label;
+    list.hidden = true;
+    box.blur();
+    pauseStory();
+    if (state.playing) setPlaying(false);
+    let year = state.year;
+    if (e.kind === "landmark") {
+      const parts = landmarks.filter((p) => p.key === e.landmark);
+      const first = Math.min(...parts.map((p) => p.to)), gone = Math.min(...parts.map((p) => p.until ?? 9999));
+      if (year < first || year >= gone) year = first;
+    } else if (e.kind === "place") {
+      if (year < e.from || year > e.to) year = e.from;
+    } else if (years[e.building] + RISE_YEARS > year) {
+      year = years[e.building] + RISE_YEARS;
+    }
+    state.year = Math.min(meta.lastYear, year);
+    render();
+    map.flyTo({ center: [e.lon, e.lat], zoom: Math.max(map.getZoom(), 17), duration: 1800, essential: true });
+    if (e.building !== undefined) buildingCard(e.building);
+    else if (e.kind === "landmark") {
+      const fact = FACTS[e.landmark];
+      showInfo(fact.name, [...fact.rows, ["More", `<a href="${fact.url}" target="_blank" rel="noopener">article</a>`]]);
+    } else showInfo(e.label, [["On the map", e.sub]]);
+  };
 }
 
 function showInfo(title, rows) {
