@@ -326,12 +326,59 @@ function ocad({ table, reid, main, cores }) {
   return { reid: old.build(), casson: casson.build(), legs: legs.build(), box: box.build() };
 }
 
+// The Royal Ontario Museum. Source: Darling and Pearson's building along Philosopher's Walk opened
+// 19 March 1914 (yellow brick); Chapman and Oxley's wing on Queen's Park opened 12 October 1933;
+// the terrace galleries along Bloor and the curatorial centre to the south were built 1978 to
+// 1984; the terraces were torn down for Libeskind's Crystal (glass and aluminium), opened 2 June
+// 2007. Shapes and heights are OpenStreetMap's; which part belongs to which era is read off the
+// city's air photos of 1939, 1978 and 1999 (pipeline/models.py), and so are the terraces, whose
+// heights are judged; the starts of work in 1910 and 1931, the copper roofs of the 1933 wing and
+// the colours are judged from photographs.
+function rom({ parts, terraces }, era) {
+  const m = new Mesh();
+  const look = { 1914: ["#d3bf8c", "#7a7c80"], 1933: ["#c8b99c", "#6e9c86"], 1984: ["#bdb8ae", "#bdb8ae"], 2007: ["#cbcfd3", "#cbcfd3"] }[era];
+  for (const p of parts.filter((q) => q.era === era)) osmPart(m, p, ...look);
+  if (era === "terraces") for (const t of terraces) m.color("#c4beb2").prism(t.ring, 0, t.top);
+  return m.build();
+}
+
+// The Art Gallery of Ontario. Source: the first galleries, by Darling and Pearson, opened beside
+// the Grange in 1918; Walker Court, its galleries and the Dundas Street entrance 1924 and 1926;
+// galleries east and west 1935; the Henry Moore Sculpture Centre, with its skylight, 26 October
+// 1974; galleries along Beverley Street 1977; Barton Myers and KPMB's expansion 1993; Frank Gehry's
+// Transformation AGO, 2004 to November 2008: the glass Galleria Italia along Dundas and the
+// five-storey block of glass and titanium to the south. Shapes and heights are OpenStreetMap's;
+// which part belongs to which era is read off the city's air photos of 1939, 1965, 1978 and 1999
+// (pipeline/models.py); the 1935 galleries are not told apart from those of 1926, nor the lower
+// buildings along Dundas before 1993. Starts of work are judged; colours are OpenStreetMap's.
+const AGO_COLOURS = { "#1e90ff": "#5d88b9", "#ADD8E6": "#bcd4de", white: "#e6e2d8" };
+
+function ago({ parts }, era) {
+  const m = new Mesh();
+  for (const p of parts.filter((q) => q.era === era)) {
+    const wall = AGO_COLOURS[p.colour] ?? (era === "2008" ? "#c9ccd0" : "#d9d0bf");
+    osmPart(m, p, wall, era === "2008" ? wall : "#9aa2a6");
+  }
+  return m.build();
+}
+
 // One entry per piece that has its own dates: built from `from` (work starts) to `to` (finished).
 export function landmarkParts(data) {
   const bmo = bmoField(data.bmoField);
   const sharp = ocad(data.ocad);
   return [
     { id: "casa-loma", key: "casaLoma", mesh: casaLoma(data.casaLoma), from: 1911.4, to: 1914.6 },
+    { id: "rom-1914", key: "rom", mesh: rom(data.rom, "1914"), from: 1910.5, to: 1914.21 },
+    { id: "rom-1933", key: "rom", mesh: rom(data.rom, "1933"), from: 1931.5, to: 1933.78 },
+    { id: "rom-terraces", key: "rom", mesh: rom(data.rom, "terraces"), from: 1978.3, to: 1984.3, until: 2005 },
+    { id: "rom-1984", key: "rom", mesh: rom(data.rom, "1984"), from: 1978.3, to: 1984.3 },
+    { id: "rom-crystal", key: "rom", mesh: rom(data.rom, "2007"), from: 2005, to: 2007.42 },
+    { id: "ago-1918", key: "ago", mesh: ago(data.ago, "1918"), from: 1916.4, to: 1918.5 },
+    { id: "ago-1926", key: "ago", mesh: ago(data.ago, "1926"), from: 1922.5, to: 1926.5 },
+    { id: "ago-1974", key: "ago", mesh: ago(data.ago, "1974"), from: 1972.5, to: 1974.82 },
+    { id: "ago-1977", key: "ago", mesh: ago(data.ago, "1977"), from: 1975.5, to: 1977.5 },
+    { id: "ago-1993", key: "ago", mesh: ago(data.ago, "1993"), from: 1990.5, to: 1993 },
+    { id: "ago-2008", key: "ago", mesh: ago(data.ago, "2008"), from: 2004.5, to: 2008.87 },
     { id: "st-james", key: "stJames", mesh: stJames(data.stJames, false), from: 1850.5, to: 1853.46 },
     { id: "st-james-tower", key: "stJames", mesh: stJames(data.stJames, true), from: 1873.2, to: 1874.9 },
     { id: "ocad-reid", key: "ocad", mesh: sharp.reid, from: 1920.2, to: 1921.6 },
@@ -379,6 +426,14 @@ export const FACTS = {
     ["Built", "Reid wing 1921; Casson wing 1957; Sharp Centre 2004, by Will Alsop"],
     ["Sharp Centre", "84 by 31 m and 9 m deep, 26 m above the ground"],
     ["Model", "Outlines from OpenStreetMap; the later additions to the main building are not shown apart; pillars judged from photographs"],
+  ] },
+  rom: { name: "Royal Ontario Museum", url: "https://en.wikipedia.org/wiki/Royal_Ontario_Museum", replaces: [], rows: [
+    ["Built", "1914 wing on Philosopher's Walk; 1933 wing on Queen's Park; terrace galleries and curatorial centre 1978 to 1984; Michael Lee-Chin Crystal 2007"],
+    ["Model", "Shapes and heights from OpenStreetMap; the eras of each part, and the terraces (torn down for the Crystal), read off the city's air photos; colours judged"],
+  ] },
+  ago: { name: "Art Gallery of Ontario", url: "https://en.wikipedia.org/wiki/Art_Gallery_of_Ontario", replaces: [], rows: [
+    ["Built", "First galleries 1918; Walker Court 1924 to 1926; Henry Moore Sculpture Centre 1974; Beverley Street 1977; expansion 1993; Frank Gehry's Transformation AGO 2008"],
+    ["Model", "Shapes and heights from OpenStreetMap; the eras of each part read off the city's air photos, so 1935 is shown with 1926; The Grange (1817) is the city's own"],
   ] },
   bmoField: { name: "BMO Field", url: "https://en.wikipedia.org/wiki/BMO_Field", replaces: [], rows: [
     ["Built", "Opened 2007; east upper deck 2015; roof 2016"],
